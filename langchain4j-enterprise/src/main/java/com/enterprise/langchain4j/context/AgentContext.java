@@ -1,6 +1,6 @@
 package com.enterprise.langchain4j.context;
 
-import com.enterprise.langchain4j.IntentType;
+import com.enterprise.langchain4j.classifier.IntentType;
 
 import java.io.Serializable;
 import java.util.HashMap;

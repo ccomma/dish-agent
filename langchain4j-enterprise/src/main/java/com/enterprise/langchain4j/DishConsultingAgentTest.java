@@ -1,5 +1,12 @@
 package com.enterprise.langchain4j;
 
+import com.enterprise.langchain4j.classifier.IntentClassifier;
+import com.enterprise.langchain4j.classifier.IntentType;
+import com.enterprise.langchain4j.rag.RAGPipeline;
+import com.enterprise.langchain4j.tool.InventoryTools;
+import com.enterprise.langchain4j.tool.OrderTools;
+import com.enterprise.langchain4j.tool.RefundTools;
+
 /**
  * 餐饮Agent自动测试
  * 用于验证Agent各个模块的功能
@@ -71,15 +78,17 @@ public class DishConsultingAgentTest {
     private static void testSaaSClient() {
         System.out.println("【3. SaaS工具测试】\n");
 
-        SaaSClient client = new SaaSClient();
+        InventoryTools inventoryTools = new InventoryTools();
+        OrderTools orderTools = new OrderTools();
+        RefundTools refundTools = new RefundTools();
 
         System.out.println("  3.1 查询门店库存:");
-        System.out.println(client.queryInventory("STORE_001", "宫保鸡丁"));
+        System.out.println(inventoryTools.queryInventory("STORE_001", "宫保鸡丁"));
 
         System.out.println("\n  3.2 查询订单:");
-        System.out.println(client.queryOrderStatus("12345"));
+        System.out.println(orderTools.queryOrderStatus("12345"));
 
         System.out.println("\n  3.3 创建退款工单:");
-        System.out.println(client.createRefundTicket("67890", "菜品凉了"));
+        System.out.println(refundTools.createRefundTicket("67890", "菜品凉了"));
     }
 }

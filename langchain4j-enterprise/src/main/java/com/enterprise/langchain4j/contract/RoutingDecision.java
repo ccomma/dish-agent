@@ -1,6 +1,6 @@
 package com.enterprise.langchain4j.contract;
 
-import com.enterprise.langchain4j.IntentType;
+import com.enterprise.langchain4j.classifier.IntentType;
 import com.enterprise.langchain4j.context.AgentContext;
 
 /**

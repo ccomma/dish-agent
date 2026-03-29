@@ -1,7 +1,7 @@
 package com.enterprise.langchain4j.agent;
 
 import com.enterprise.langchain4j.Config;
-import com.enterprise.langchain4j.IntentType;
+import com.enterprise.langchain4j.classifier.IntentType;
 import com.enterprise.langchain4j.context.AgentContext;
 import com.enterprise.langchain4j.contract.AgentResponse;
 import com.enterprise.langchain4j.tool.InventoryTools;
