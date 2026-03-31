@@ -1,5 +1,6 @@
-package com.example.langchain4jdemo;
+package com.example.langchain4jdemo.tool;
 
+import com.example.langchain4jdemo.Config;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.openai.OpenAiChatModel;

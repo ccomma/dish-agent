@@ -1,5 +1,6 @@
-package com.example.langchain4jdemo;
+package com.example.langchain4jdemo.basics;
 
+import com.example.langchain4jdemo.Config;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
