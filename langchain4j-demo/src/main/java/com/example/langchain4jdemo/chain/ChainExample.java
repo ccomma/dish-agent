@@ -1,11 +1,10 @@
 package com.example.langchain4jdemo.chain;
 
 import com.example.langchain4jdemo.Config;
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
 import java.util.function.Function;
@@ -31,10 +30,10 @@ public class ChainExample {
      * 翻译链实现
      */
     static class TranslationChain implements LLMChain {
-        private final ChatLanguageModel model;
+        private final ChatModel model;
         private final String targetLanguage;
 
-        TranslationChain(ChatLanguageModel model, String targetLanguage) {
+        TranslationChain(ChatModel model, String targetLanguage) {
             this.model = model;
             this.targetLanguage = targetLanguage;
         }
@@ -42,8 +41,8 @@ public class ChainExample {
         @Override
         public String execute(String input) {
             String prompt = "将以下文本翻译成" + targetLanguage + "，只返回翻译结果：\n" + input;
-            Response<AiMessage> response = model.generate(List.of(UserMessage.from(prompt)));
-            return response.content().text();
+            ChatResponse response = model.chat(List.of(UserMessage.from(prompt)));
+            return response.aiMessage().text();
         }
     }
 
@@ -51,17 +50,17 @@ public class ChainExample {
      * 摘要链实现
      */
     static class SummaryChain implements LLMChain {
-        private final ChatLanguageModel model;
+        private final ChatModel model;
 
-        SummaryChain(ChatLanguageModel model) {
+        SummaryChain(ChatModel model) {
             this.model = model;
         }
 
         @Override
         public String execute(String input) {
             String prompt = "为以下文本生成一个简短的摘要（不超过20字）：\n" + input;
-            Response<AiMessage> response = model.generate(List.of(UserMessage.from(prompt)));
-            return response.content().text();
+            ChatResponse response = model.chat(List.of(UserMessage.from(prompt)));
+            return response.aiMessage().text();
         }
     }
 
@@ -69,17 +68,17 @@ public class ChainExample {
      * 情感分析链实现
      */
     static class SentimentChain implements LLMChain {
-        private final ChatLanguageModel model;
+        private final ChatModel model;
 
-        SentimentChain(ChatLanguageModel model) {
+        SentimentChain(ChatModel model) {
             this.model = model;
         }
 
         @Override
         public String execute(String input) {
             String prompt = "分析以下文本的情感，只返回 positive、negative 或 neutral 之一：\n" + input;
-            Response<AiMessage> response = model.generate(List.of(UserMessage.from(prompt)));
-            return response.content().text().trim().toLowerCase();
+            ChatResponse response = model.chat(List.of(UserMessage.from(prompt)));
+            return response.aiMessage().text().trim().toLowerCase();
         }
     }
 
@@ -87,17 +86,17 @@ public class ChainExample {
      * 关键词提取链实现
      */
     static class KeywordChain implements LLMChain {
-        private final ChatLanguageModel model;
+        private final ChatModel model;
 
-        KeywordChain(ChatLanguageModel model) {
+        KeywordChain(ChatModel model) {
             this.model = model;
         }
 
         @Override
         public String execute(String input) {
             String prompt = "从以下文本中提取3个关键词或短语，用逗号分隔：\n" + input;
-            Response<AiMessage> response = model.generate(List.of(UserMessage.from(prompt)));
-            return response.content().text().trim();
+            ChatResponse response = model.chat(List.of(UserMessage.from(prompt)));
+            return response.aiMessage().text().trim();
         }
     }
 
@@ -129,7 +128,7 @@ public class ChainExample {
         private final LLMChain negativeChain;
         private final LLMChain sentimentChecker;
 
-        ConditionalChain(ChatLanguageModel model) {
+        ConditionalChain(ChatModel model) {
             this.sentimentChecker = new SentimentChain(model);
             this.positiveChain = new TranslationChain(model, "中文");
             this.negativeChain = new SummaryChain(model);
@@ -154,7 +153,7 @@ public class ChainExample {
 
         try {
             // 创建聊天模型
-            ChatLanguageModel model = OpenAiChatModel.builder()
+            ChatModel model = OpenAiChatModel.builder()
                     .apiKey(config.getApiKey())
                     .baseUrl(config.getBaseUrl())
                     .modelName(config.getModel())
@@ -243,8 +242,8 @@ public class ChainExample {
             String augmented = augment(query, retrieved);
             System.out.println("[Step 2] 增强: " + augmented);
 
-            Response<AiMessage> generated = model.generate(List.of(UserMessage.from(augmented)));
-            System.out.println("[Step 3] 生成: " + generated.content().text());
+            ChatResponse generated = model.chat(List.of(UserMessage.from(augmented)));
+            System.out.println("[Step 3] 生成: " + generated.aiMessage().text());
 
             System.out.println("\n══════════════════════════════════════════════════════════\n");
 

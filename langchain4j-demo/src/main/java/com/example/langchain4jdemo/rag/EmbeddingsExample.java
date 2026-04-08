@@ -3,7 +3,7 @@ package com.example.langchain4jdemo.rag;
 import com.example.langchain4jdemo.Config;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
@@ -34,7 +34,7 @@ public class EmbeddingsExample {
 
         try {
             // 创建聊天模型（用于后续生成回答）
-            ChatLanguageModel chatModel = OpenAiChatModel.builder()
+            ChatModel chatModel = OpenAiChatModel.builder()
                     .apiKey(config.getApiKey())
                     .baseUrl(config.getBaseUrl())
                     .modelName(config.getModel())
@@ -137,7 +137,7 @@ public class EmbeddingsExample {
 
             // Step 3: 生成回答
             System.out.println("\n[Step 2] 生成回答...");
-            String answer = chatModel.generate(augmentedPrompt);
+            String answer = chatModel.chat(augmentedPrompt);
             System.out.println("\n[Step 3] 最终回答:\n" + answer);
 
             System.out.println("\n══════════════════════════════════════════════════════════\n");

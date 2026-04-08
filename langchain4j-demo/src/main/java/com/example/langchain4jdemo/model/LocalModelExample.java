@@ -1,6 +1,6 @@
 package com.example.langchain4jdemo.model;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
@@ -40,14 +40,14 @@ public class LocalModelExample {
             // 示例1: 使用Llama2模型
             System.out.println("1. 使用Llama2模型:");
 
-            ChatLanguageModel llamaModel = OllamaChatModel.builder()
+            ChatModel llamaModel = OllamaChatModel.builder()
                     .baseUrl("http://localhost:11434")
                     .modelName("llama2")
                     .temperature(0.7)
                     .build();
 
             LocalAssistant llamaAssistant = AiServices.builder(LocalAssistant.class)
-                    .chatLanguageModel(llamaModel)
+                    .chatModel(llamaModel)
                     .build();
 
             System.out.println("用户: 用中文介绍一下你自己");
@@ -59,14 +59,14 @@ public class LocalModelExample {
             System.out.println("2. 使用Mistral模型:");
 
             try {
-                ChatLanguageModel mistralModel = OllamaChatModel.builder()
+                ChatModel mistralModel = OllamaChatModel.builder()
                         .baseUrl("http://localhost:11434")
                         .modelName("mistral")
                         .temperature(0.7)
                         .build();
 
                 LocalAssistant mistralAssistant = AiServices.builder(LocalAssistant.class)
-                        .chatLanguageModel(mistralModel)
+                        .chatModel(mistralModel)
                         .build();
 
                 System.out.println("用户: 解释一下人工智能的主要应用领域");
@@ -82,7 +82,7 @@ public class LocalModelExample {
             // 示例3: 简单的对话循环
             System.out.println("3. 对话演示（输入 'exit' 退出）:");
 
-            ChatLanguageModel model = OllamaChatModel.builder()
+            ChatModel model = OllamaChatModel.builder()
                     .baseUrl("http://localhost:11434")
                     .modelName("llama2") // 可以使用其他模型如 "mistral", "codellama"
                     .temperature(0.7)
@@ -105,7 +105,7 @@ public class LocalModelExample {
                 }
 
                 try {
-                    String aiResponse = model.generate(userInput);
+                    String aiResponse = model.chat(userInput);
                     System.out.println("AI: " + aiResponse);
                     System.out.println();
                 } catch (Exception e) {
@@ -122,7 +122,7 @@ public class LocalModelExample {
             // 示例4: 代码生成演示
             System.out.println("\n4. 代码生成演示:");
 
-            ChatLanguageModel codeModel = OllamaChatModel.builder()
+            ChatModel codeModel = OllamaChatModel.builder()
                     .baseUrl("http://localhost:11434")
                     .modelName("codellama") // 代码专用模型
                     .temperature(0.3) // 较低温度以获得更确定的代码
@@ -130,13 +130,13 @@ public class LocalModelExample {
 
             if (isModelAvailable("codellama")) {
                 System.out.println("用户: 写一个Java函数计算斐波那契数列");
-                String codeResponse = codeModel.generate("写一个Java函数计算斐波那契数列");
+                String codeResponse = codeModel.chat("写一个Java函数计算斐波那契数列");
                 System.out.println("AI: " + codeResponse);
             } else {
                 System.out.println("CodeLlama模型不可用，请运行: ollama pull codellama");
                 // 使用llama2作为备选
                 System.out.println("用户: 写一个Java函数计算斐波那契数列");
-                String codeResponse = model.generate("写一个Java函数计算斐波那契数列");
+                String codeResponse = model.chat("写一个Java函数计算斐波那契数列");
                 System.out.println("AI: " + codeResponse);
             }
 

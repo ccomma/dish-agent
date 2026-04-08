@@ -2,7 +2,7 @@ package com.enterprise.langchain4j.rag;
 
 import com.enterprise.langchain4j.Config;
 import dev.langchain4j.data.document.Document;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 import java.io.InputStream;
@@ -21,7 +21,7 @@ import java.util.*;
  */
 public class RAGPipeline {
 
-    private final ChatLanguageModel chatModel;
+    private final ChatModel chatModel;
     private final Map<String, KnowledgeEntry> knowledgeBase;
 
     /**
@@ -327,7 +327,7 @@ public class RAGPipeline {
             """, context, question);
 
         // 3. 调用 LLM 生成
-        return chatModel.generate(prompt);
+        return chatModel.chat(prompt);
     }
 
     /**

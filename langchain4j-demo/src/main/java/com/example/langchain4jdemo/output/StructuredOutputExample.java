@@ -1,7 +1,7 @@
 package com.example.langchain4jdemo.output;
 
 import com.example.langchain4jdemo.Config;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 import java.time.LocalDate;
@@ -37,7 +37,7 @@ public class StructuredOutputExample {
 
         try {
             // 创建Minimax聊天模型
-            ChatLanguageModel model = OpenAiChatModel.builder()
+            ChatModel model = OpenAiChatModel.builder()
                     .apiKey(config.getApiKey())
                     .baseUrl(config.getBaseUrl())
                     .modelName(config.getModel())
@@ -52,7 +52,7 @@ public class StructuredOutputExample {
 
             String prompt = "从以下文本中提取人物信息，以JSON格式返回，包含name、age、occupation、hobbies字段。\n文本：" + text1;
 
-            String jsonResponse = model.generate(prompt);
+            String jsonResponse = model.chat(prompt);
 
             System.out.println("原始文本: " + text1);
             System.out.println("提取的结构化数据:");
@@ -64,7 +64,7 @@ public class StructuredOutputExample {
 
             String productPrompt = "生成一个智能手机的产品信息，以JSON格式返回，包含name、description、price、stock、category字段。";
 
-            String productResponse = model.generate(productPrompt);
+            String productResponse = model.chat(productPrompt);
 
             System.out.println("生成的产品信息:");
             System.out.println(productResponse);
@@ -78,7 +78,7 @@ public class StructuredOutputExample {
 
             String weatherPrompt = "从以下天气预报文本中提取信息，以JSON格式返回，包含city、temperature、condition、humidity、windSpeed、date字段。\n文本：" + weatherText;
 
-            String weatherResponse = model.generate(weatherPrompt);
+            String weatherResponse = model.chat(weatherPrompt);
 
             System.out.println("原始天气预报: " + weatherText);
             System.out.println("提取的结构化数据:");
@@ -95,7 +95,7 @@ public class StructuredOutputExample {
 
             String newsPrompt = "从以下新闻中提取公司信息，以JSON格式返回，包含companies数组，每个公司有name、ceo、announcement、product字段。同时提取technologies数组和summary。\n新闻：" + news;
 
-            String newsResponse = model.generate(newsPrompt);
+            String newsResponse = model.chat(newsPrompt);
 
             System.out.println("原始新闻: " + news);
             System.out.println("提取的结构化数据:");

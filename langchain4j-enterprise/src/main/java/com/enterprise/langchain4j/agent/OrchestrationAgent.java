@@ -4,7 +4,7 @@ import com.enterprise.langchain4j.Config;
 import com.enterprise.langchain4j.context.AgentContext;
 import com.enterprise.langchain4j.contract.AgentResponse;
 import com.enterprise.langchain4j.contract.RoutingDecision;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 /**
@@ -24,7 +24,7 @@ public class OrchestrationAgent {
     private final RoutingAgent routingAgent;
     private final DishKnowledgeAgent dishKnowledgeAgent;
     private final WorkOrderAgent workOrderAgent;
-    private final ChatLanguageModel chatModel;
+    private final ChatModel chatModel;
 
     public OrchestrationAgent() {
         Config config = Config.getInstance();
@@ -106,7 +106,7 @@ public class OrchestrationAgent {
      * 处理闲聊类请求（直接对话）
      */
     private AgentResponse handleChat(AgentContext context) {
-        String response = chatModel.generate(context.getUserInput());
+        String response = chatModel.chat(context.getUserInput());
         return AgentResponse.success(response, "ChatAgent", context);
     }
 

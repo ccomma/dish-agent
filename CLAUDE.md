@@ -2,12 +2,25 @@
 
 本文件为 Claude Code (claude.ai/code) 在此代码库中工作时提供指导。
 
+**重要**：每次对项目进行修改后，请检查是否需要同步更新本文件和 README.md，以确保文档与代码保持一致。
+
 ## 项目概述
 
-这是一个 **LangChain4j 教学项目**，包含两个模块：
+这是一个 **LangChain4j 1.x 教学项目**，包含两个模块：
 
 ### langchain4j-demo 模块（教学演示）
-展示 LangChain4j 核心功能，共 6 个独立示例。
+展示 LangChain4j 1.x 核心 API 的完整示例，包括：
+- 基础对话 (BasicChatExample)
+- 提示模板 (PromptTemplateExample) - 使用 `PromptTemplate` API
+- 文档 RAG (DocumentRAGExample)
+- 工具调用 (ToolCallingExample)
+- 本地模型 (LocalModelExample)
+- 结构化输出 (StructuredOutputExample)
+- 记忆 (MemoryExample)
+- 链式调用 (ChainExample)
+- 流式输出 (StreamingExample)
+- 输出解析 (OutputParserExample)
+- 向量嵌入 (EmbeddingsExample)
 
 ### langchain4j-enterprise 模块（企业级多Agent架构）
 基于**多Agent协同架构**的餐饮智能助手，包含：
@@ -21,43 +34,46 @@
 ### 构建和编译
 ```bash
 # 编译项目
-mvn compile
+mvn compile -s settings-test.xml
 
 # 清理并编译
-mvn clean compile
+mvn clean compile -s settings-test.xml
 
 # 打包为 JAR
-mvn package
+mvn package -s settings-test.xml
 ```
 
-### 运行企业级多Agent示例（推荐）
+### 运行企业级多Agent示例
 ```bash
 # 启动多Agent协同架构
-mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.Bootstrap"
+mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.Bootstrap" -s settings-test.xml
 
 # 运行模块测试
-mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.MultiAgentTest"
+mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.MultiAgentTest" -s settings-test.xml
 ```
 
 ### 运行教学演示示例
 ```bash
-# 基础对话示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.BasicChatExample"
+# 提示模板示例（展示 PromptTemplate API）
+mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.basics.PromptTemplateExample" -s settings-test.xml
 
-# 提示模板示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.PromptTemplateExample"
+# 基础对话示例
+mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.basics.BasicChatExample" -s settings-test.xml
+
+# 记忆示例
+mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.memory.MemoryExample" -s settings-test.xml
 
 # RAG 示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.DocumentRAGExample"
+mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.rag.DocumentRAGExample" -s settings-test.xml
 
 # 工具调用示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.ToolCallingExample"
+mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.tool.ToolCallingExample" -s settings-test.xml
 
 # 本地模型示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.LocalModelExample"
+mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.model.LocalModelExample" -s settings-test.xml
 
 # 结构化输出示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.StructuredOutputExample"
+mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.output.StructuredOutputExample" -s settings-test.xml
 ```
 
 ## 项目结构
@@ -65,23 +81,41 @@ mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.StructuredOutputExam
 ```
 dish-agent/
 ├── pom.xml                           # 父 POM
+├── settings-test.xml                  # Maven 配置（不使用镜像）
 ├── langchain4j-demo/                 # 教学演示模块
 │   └── src/main/java/com/example/langchain4jdemo/
-│       ├── BasicChatExample.java
-│       ├── PromptTemplateExample.java
-│       ├── DocumentRAGExample.java
-│       ├── ToolCallingExample.java
-│       ├── LocalModelExample.java
-│       └── StructuredOutputExample.java
+│       ├── Config.java
+│       ├── TestMinimax.java
+│       ├── basics/
+│       │   ├── BasicChatExample.java       # 基础对话
+│       │   └── PromptTemplateExample.java  # 提示模板（PromptTemplate API）
+│       ├── memory/
+│       │   └── MemoryExample.java          # 记忆管理
+│       ├── tool/
+│       │   └── ToolCallingExample.java     # 工具调用
+│       ├── chain/
+│       │   └── ChainExample.java          # 链式调用
+│       ├── rag/
+│       │   ├── DocumentRAGExample.java    # 文档 RAG
+│       │   └── EmbeddingsExample.java      # 向量嵌入
+│       ├── streaming/
+│       │   └── StreamingExample.java       # 流式输出
+│       ├── output/
+│       │   ├── StructuredOutputExample.java # 结构化输出
+│       │   └── OutputParserExample.java    # 输出解析
+│       └── model/
+│           └── LocalModelExample.java      # 本地模型（Ollama）
 ├── langchain4j-enterprise/           # 企业级多Agent模块
 │   └── src/main/java/com/enterprise/langchain4j/
 │       ├── Bootstrap.java            # [启动入口]
 │       ├── MultiAgentTest.java       # [模块测试]
+│       ├── Config.java
+│       ├── DishConsultingAgentTest.java
 │       ├── agent/                    # Agent 实现
 │       │   ├── OrchestrationAgent.java  # 编排协调层
-│       │   ├── RoutingAgent.java         # 前置路由Agent
-│       │   ├── DishKnowledgeAgent.java   # 菜品知识Agent
-│       │   └── WorkOrderAgent.java       # 工单处理Agent
+│       │   ├── RoutingAgent.java       # 前置路由Agent
+│       │   ├── DishKnowledgeAgent.java # 菜品知识Agent
+│       │   └── WorkOrderAgent.java     # 工单处理Agent
 │       ├── context/                  # 上下文传递
 │       │   └── AgentContext.java
 │       ├── contract/                 # 契约定义
@@ -94,9 +128,8 @@ dish-agent/
 │       ├── classifier/               # 意图分类
 │       │   ├── IntentClassifier.java
 │       │   └── IntentType.java
-│       ├── rag/                      # RAG管道
-│       │   └── RAGPipeline.java
-│       └── Config.java
+│       └── rag/                     # RAG管道
+│           └── RAGPipeline.java
 ├── run_example.sh
 ├── README.md
 └── CLAUDE.md
@@ -132,34 +165,80 @@ dish-agent/
 3. **AgentResponse** - Agent统一响应
    - success, content, agentName, context, followUpHints
 
-## 架构和关键模式
+## LangChain4j 1.x 关键 API
 
-### 1. 模型配置模式
-- 通过 `Config.java` 单例从 `config.properties` 加载配置
-- 使用 `OpenAiChatModel.builder()...build()` 构建模型
+### 1. 模型配置
+```java
+// 使用 ChatModel 接口（替代旧的 ChatLanguageModel）
+ChatModel model = OpenAiChatModel.builder()
+    .apiKey(config.getApiKey())
+    .baseUrl(config.getBaseUrl())
+    .modelName(config.getModel())
+    .temperature(0.7)
+    .build();
+```
 
 ### 2. AiServices 构建器模式
-- 使用 `@SystemMessage` 注解定义接口行为
-- 通过 `.tools()` 注入工具
-- 通过 `.chatMemory()` 管理对话历史
+```java
+// 使用 .chatModel() 方法（替代旧的 .chatLanguageModel()）
+Assistant assistant = AiServices.builder(Assistant.class)
+    .chatModel(model)           // 新 API
+    .chatMemory(memory)
+    .tools(tool1, tool2)
+    .build();
+```
 
-### 3. @Tool 注解模式
-- 定义 AI 可调用的工具方法
-- 使用 `@P` 注解标注参数
+### 3. 消息构建
+```java
+// 使用静态工厂方法
+List<ChatMessage> messages = List.of(
+    SystemMessage.from("你是一个有帮助的助手"),
+    UserMessage.from("你好")
+);
 
-### 4. RAG 实现模式
-- 文档检索 → 上下文组装 → LLM 生成
-- 使用关键词匹配（可扩展为向量检索）
+// 或使用 .systemMessage() / .userMessage()
+ChatResponse response = model.chat(messages);
+String text = response.aiMessage().text();
+```
+
+### 4. PromptTemplate API（1.x 新特性）
+```java
+// 使用 PromptTemplate 进行模板渲染
+PromptTemplate template = PromptTemplate.from(
+    "请将{{text}}翻译成{{targetLanguage}}"
+);
+
+Prompt filled = template.apply(Map.of(
+    "text", input,
+    "targetLanguage", "中文"
+));
+
+String promptText = filled.text();
+```
+
+### 5. @Tool 注解模式
+```java
+public class MyTools {
+    @Tool("查询库存")
+    public String queryInventory(@P("门店ID") String storeId) {
+        // implementation
+    }
+}
+```
+
+### 6. ChatMemory
+```java
+ChatMemory memory = MessageWindowChatMemory.withMaxMessages(20);
+```
 
 ## 依赖管理
 
-- LangChain4j 版本: `0.31.0`（在 pom.xml 中定义）
-- Java 版本: 17+
-- 核心依赖:
+- **LangChain4j 版本**: `1.12.2`（在 pom.xml 中定义）
+- **Java 版本**: 17+
+- **核心依赖**:
   - `langchain4j` (核心)
   - `langchain4j-open-ai` (OpenAI/Minimax 兼容)
   - `langchain4j-ollama` (本地模型)
-  - `langchain4j-milvus` / `langchain4j-elasticsearch` (向量存储，可选)
 
 ## 环境要求
 
@@ -171,5 +250,5 @@ dish-agent/
 
 1. **缺少 Minimax API 密钥** - 在 config.properties 中设置 MINIMAX_API_KEY
 2. **Ollama 服务未运行** - 使用 `ollama serve` 启动并拉取所需模型
-3. **编译错误** - 确保使用 Java 17+，运行 `mvn clean compile`
-4. **版本不兼容** - 确保 LangChain4j 版本与 Java 版本匹配
+3. **编译错误** - 确保使用 Java 17+，运行 `mvn clean compile -s settings-test.xml`
+4. **Maven 仓库连接问题** - 使用 `settings-test.xml` 配置指向 Maven Central

@@ -6,7 +6,7 @@ import com.enterprise.langchain4j.context.AgentContext;
 import com.enterprise.langchain4j.contract.AgentResponse;
 import com.enterprise.langchain4j.rag.RAGPipeline;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
@@ -53,7 +53,7 @@ public class DishKnowledgeAgent {
     public DishKnowledgeAgent() {
         Config config = Config.getInstance();
 
-        ChatLanguageModel chatModel = OpenAiChatModel.builder()
+        ChatModel chatModel = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -63,16 +63,16 @@ public class DishKnowledgeAgent {
         this.ragPipeline = new RAGPipeline();
 
         this.assistant = AiServices.builder(DishKnowledgeAssistant.class)
-                .chatLanguageModel(chatModel)
+                .chatModel(chatModel)
                 .chatMemory(MessageWindowChatMemory.withMaxMessages(10))
                 .build();
     }
 
-    public DishKnowledgeAgent(RAGPipeline ragPipeline, ChatLanguageModel chatModel) {
+    public DishKnowledgeAgent(RAGPipeline ragPipeline, ChatModel chatModel) {
         this.ragPipeline = ragPipeline;
 
         this.assistant = AiServices.builder(DishKnowledgeAssistant.class)
-                .chatLanguageModel(chatModel)
+                .chatModel(chatModel)
                 .chatMemory(MessageWindowChatMemory.withMaxMessages(10))
                 .build();
     }

@@ -1,7 +1,7 @@
 package com.enterprise.langchain4j.classifier;
 
 import com.enterprise.langchain4j.Config;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 import java.util.Arrays;
@@ -51,7 +51,7 @@ public class IntentClassifier {
         "申请退款", "要退款", "退款", "售后", "退单", "取消订单"
     ));
 
-    private final ChatLanguageModel chatModel;
+    private final ChatModel chatModel;
 
     public IntentClassifier() {
         Config config = Config.getInstance();
@@ -127,7 +127,7 @@ public class IntentClassifier {
                     "CREATE_REFUND=退款申请, UNKNOWN=未知\n\n" +
                     "用户输入：" + userInput + "\n\n只输出意图名称，例如 GREETING";
 
-            String result = chatModel.generate(prompt).trim().toUpperCase();
+            String result = chatModel.chat(prompt).trim().toUpperCase();
 
             // 提取意图名称
             for (IntentType intent : IntentType.values()) {

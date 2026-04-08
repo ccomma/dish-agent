@@ -1,41 +1,28 @@
 package com.example.langchain4jdemo.basics;
 
 import com.example.langchain4jdemo.Config;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.input.Prompt;
+import dev.langchain4j.model.input.PromptTemplate;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.output.Response;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 提示模板和系统消息示例
- * 演示如何使用系统消息、用户消息和 LangChain4j 的消息构建模式
- *
- * LangChain4j 0.31.0 中没有独立的 PromptTemplate 类，
- * 而是通过 Message 类（SystemMessage、UserMessage）来构建提示
+ * 演示如何使用 LangChain4j 1.x 的 PromptTemplate API 和消息构建模式
  */
 public class PromptTemplateExample {
-
-    // 简单的模板替换方法（模拟 PromptTemplate 功能）
-    static String fillTemplate(String template, String... keyValues) {
-        String result = template;
-        for (int i = 0; i < keyValues.length - 1; i += 2) {
-            result = result.replace("{{" + keyValues[i] + "}}", keyValues[i + 1]);
-        }
-        return result;
-    }
 
     public static void main(String[] args) {
         // 从配置文件加载配置
         Config config = Config.getInstance();
 
         // 创建Minimax聊天模型
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -54,40 +41,42 @@ public class PromptTemplateExample {
 
         String userMessageText = "请解释Java中的多态性，并给出一个简单的示例。";
 
-        // 构建消息列表
-        List<ChatMessage> messages = Arrays.asList(
-                SystemMessage.from(systemMessageText),
+        // 构建消息列表并发送请求
+        List<dev.langchain4j.data.message.ChatMessage> messages = List.of(
+                dev.langchain4j.data.message.SystemMessage.from(systemMessageText),
                 UserMessage.from(userMessageText)
         );
 
-        Response<AiMessage> response = model.generate(messages);
+        ChatResponse response = model.chat(messages);
         System.out.println("系统消息: " + systemMessageText);
         System.out.println("用户消息: " + userMessageText);
-        System.out.println("AI响应: " + response.content().text());
+        System.out.println("AI响应: " + response.aiMessage().text());
         System.out.println("Tokens使用: " + response.tokenUsage());
 
         System.out.println("\n══════════════════════════════════════════════════════════\n");
 
-        // 示例2: 使用模板替换模式构建提示
+        // 示例2: 使用 LangChain4j 1.x PromptTemplate API
         System.out.println("╔════════════════════════════════════════════════════╗");
-        System.out.println("║ 示例2: 模板替换模式构建提示                      ║");
+        System.out.println("║ 示例2: 使用 PromptTemplate API                  ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        // 定义模板字符串
-        String template = "请将以下英语文本翻译成{{targetLanguage}}：\n{{text}}";
-
-        // 使用模板替换变量
-        String filledPrompt = fillTemplate(template,
-            "targetLanguage", "中文",
-            "text", "Hello, welcome to LangChain4j tutorial. This framework helps you build AI-powered applications in Java."
+        // 定义模板字符串，使用 {{variable}} 占位符
+        PromptTemplate template = PromptTemplate.from(
+            "请将以下英语文本翻译成{{targetLanguage}}：\n{{text}}"
         );
 
-        System.out.println("模板: " + template);
+        // 使用 Map 填充变量
+        Prompt filledPrompt = template.apply(Map.of(
+            "targetLanguage", "中文",
+            "text", "Hello, welcome to LangChain4j tutorial! This framework helps you build AI-powered applications in Java."
+        ));
+
+        System.out.println("模板: " + template.template());
         System.out.println("\n填充后的 Prompt:");
-        System.out.println(filledPrompt);
+        System.out.println(filledPrompt.text());
 
         // 发送翻译请求
-        String translation = model.generate(filledPrompt);
+        String translation = model.chat(filledPrompt.text());
         System.out.println("\n翻译结果: " + translation);
 
         System.out.println("\n══════════════════════════════════════════════════════════\n");
@@ -97,38 +86,42 @@ public class PromptTemplateExample {
         System.out.println("║ 示例3: 对话历史示例                              ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        List<ChatMessage> conversation = Arrays.asList(
-                SystemMessage.from("你是一个友好的聊天机器人。"),
+        List<dev.langchain4j.data.message.ChatMessage> conversation = List.of(
+                dev.langchain4j.data.message.SystemMessage.from("你是一个友好的聊天机器人。"),
                 UserMessage.from("你好！"),
-                AiMessage.from("你好！我是AI助手，有什么可以帮你的吗？"),
                 UserMessage.from("你能告诉我今天的天气如何吗？")
         );
 
-        Response<AiMessage> conversationResponse = model.generate(conversation);
+        ChatResponse conversationResponse = model.chat(conversation);
         System.out.println("对话历史:");
-        conversation.forEach(msg -> System.out.println("  " + msg.type() + ": " + msg.text()));
-        System.out.println("\n最新响应: " + conversationResponse.content().text());
+        for (dev.langchain4j.data.message.ChatMessage msg : conversation) {
+            System.out.println("  " + msg.type() + ": " + msg);
+        }
+        System.out.println("\n最新响应: " + conversationResponse.aiMessage().text());
 
         System.out.println("\n══════════════════════════════════════════════════════════\n");
 
-        // 示例4: 复杂模板（多个变量和条件）
+        // 示例4: 复杂模板（多个变量）
         System.out.println("╔════════════════════════════════════════════════════╗");
         System.out.println("║ 示例4: 复杂模板示例                              ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        String complexTemplate =
+        PromptTemplate complexTemplate = PromptTemplate.from(
             "你是一个{{role}}。\n" +
             "用户信息：{{userName}}\n" +
             "用户等级：{{userLevel}}\n" +
             "问题：{{question}}\n\n" +
-            "请根据用户等级调整回答的详细程度。";
+            "请根据用户等级调整回答的详细程度。"
+        );
 
-        String filledComplex = fillTemplate(complexTemplate,
+        Map<String, Object> variables = Map.of(
             "role", "技术顾问",
             "userName", "张三",
             "userLevel", "初级",
             "question", "什么是设计模式？"
         );
+
+        Prompt filledComplex = complexTemplate.apply(variables);
 
         System.out.println("模板变量:");
         System.out.println("  role = 技术顾问");
@@ -136,12 +129,14 @@ public class PromptTemplateExample {
         System.out.println("  userLevel = 初级");
         System.out.println("  question = 什么是设计模式？");
         System.out.println("\n生成的 Prompt:");
-        System.out.println(filledComplex);
+        System.out.println(filledComplex.text());
 
-        Response<AiMessage> complexResponse = model.generate(
-            List.of(SystemMessage.from("你是一个技术顾问"), UserMessage.from(filledComplex))
-        );
-        System.out.println("\nAI响应: " + complexResponse.content().text());
+        ChatResponse complexChatResponse = model.chat(List.of(
+            dev.langchain4j.data.message.SystemMessage.from("你是一个技术顾问"),
+            UserMessage.from(filledComplex.text())
+        ));
+        String complexResponse = complexChatResponse.aiMessage().text();
+        System.out.println("\nAI响应: " + complexResponse);
 
         System.out.println("\n══════════════════════════════════════════════════════════\n");
 
@@ -150,22 +145,23 @@ public class PromptTemplateExample {
         System.out.println("║ 示例5: Few-shot 提示示例                        ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        String fewShotPrompt =
+        PromptTemplate fewShotTemplate = PromptTemplate.from(
             "你是一个情感分析助手。请判断文本的情感是正面(positive)还是负面(negative)。\n\n" +
             "示例：\n" +
             "输入：我今天很开心！ → 输出：positive\n" +
             "输入：这个产品太差了，很失望。 → 输出：negative\n\n" +
             "现在请判断：\n" +
-            "输入：{{text}}";
+            "输入：{{text}}"
+        );
 
         String inputText = "这家餐厅的食物非常美味，服务也很棒！";
-        String filledFewShot = fillTemplate(fewShotPrompt, "text", inputText);
+        Prompt filledFewShot = fewShotTemplate.apply(Map.of("text", inputText));
 
         System.out.println("输入文本: " + inputText);
         System.out.println("\n生成的 Few-shot Prompt:");
-        System.out.println(filledFewShot);
+        System.out.println(filledFewShot.text());
 
-        String sentiment = model.generate(filledFewShot);
+        String sentiment = model.chat(filledFewShot.text());
         System.out.println("\n情感判断: " + sentiment);
 
         System.out.println("\n══════════════════════════════════════════════════════════\n");
@@ -181,10 +177,11 @@ public class PromptTemplateExample {
         System.out.println("原文: " + originalText + "\n");
 
         String current = originalText;
-        for (int i = 0; i < languages.length; i++) {
-            String lang = languages[i];
-            String translatePrompt = "将以下文本翻译成" + lang + "，只返回翻译结果：\n" + current;
-            current = model.generate(translatePrompt);
+        for (String lang : languages) {
+            PromptTemplate translateTemplate = PromptTemplate.from(
+                "将以下文本翻译成" + lang + "，只返回翻译结果：\n{{text}}"
+            );
+            current = model.chat(translateTemplate.apply(Map.of("text", current)).text());
             System.out.println("翻译成" + lang + ": " + current);
         }
 

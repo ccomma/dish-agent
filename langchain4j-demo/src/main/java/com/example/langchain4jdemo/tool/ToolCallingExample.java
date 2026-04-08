@@ -126,7 +126,7 @@ public class ToolCallingExample {
 
             // 创建AI助手，注入所有工具
             Assistant assistant = AiServices.builder(Assistant.class)
-                    .chatLanguageModel(OpenAiChatModel.builder()
+                    .chatModel(OpenAiChatModel.builder()
                             .apiKey(config.getApiKey())
                             .baseUrl(config.getBaseUrl())
                             .modelName(config.getModel())

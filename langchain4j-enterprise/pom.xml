@@ -36,18 +36,6 @@
             <artifactId>langchain4j-ollama</artifactId>
         </dependency>
 
-        <!-- Milvus Vector Store -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-milvus</artifactId>
-        </dependency>
-
-        <!-- Elasticsearch Vector Store -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-elasticsearch</artifactId>
-        </dependency>
-
         <!-- Slf4j Simple -->
         <dependency>
             <groupId>org.slf4j</groupId>

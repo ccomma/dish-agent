@@ -6,9 +6,8 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.output.Response;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
 
@@ -43,7 +42,7 @@ public class MemoryExample {
         // 限制最多保留 5 条消息
         ChatMemory memory = MessageWindowChatMemory.withMaxMessages(5);
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -51,7 +50,7 @@ public class MemoryExample {
                 .build();
 
         Assistant assistant = AiServices.builder(Assistant.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .chatMemory(memory)
                 .build();
 
@@ -99,7 +98,7 @@ public class MemoryExample {
         // 限制最多 10 条消息
         ChatMemory memory = MessageWindowChatMemory.withMaxMessages(10);
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -107,7 +106,7 @@ public class MemoryExample {
                 .build();
 
         Assistant assistant = AiServices.builder(Assistant.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .chatMemory(memory)
                 .build();
 
@@ -147,7 +146,7 @@ public class MemoryExample {
 
         ChatMemory memory = MessageWindowChatMemory.withMaxMessages(10);
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -169,9 +168,9 @@ public class MemoryExample {
         System.out.println("Memory 大小: " + memory.messages().size());
 
         // 对比
-        String response = model.generate(
+        String response = model.chat(
             List.of(UserMessage.from("你还记得我吗？"))
-        ).content().text();
+        ).aiMessage().text();
         System.out.println("\nAI: " + response);
         System.out.println("(Memory 已清空，AI 不记得之前的内容)\n");
     }
@@ -185,7 +184,7 @@ public class MemoryExample {
         System.out.println("║ 示例4: 多会话 Memory 隔离                        ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -197,12 +196,12 @@ public class MemoryExample {
         ChatMemory userBMemory = MessageWindowChatMemory.withMaxMessages(10);
 
         Assistant assistantA = AiServices.builder(Assistant.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .chatMemory(userAMemory)
                 .build();
 
         Assistant assistantB = AiServices.builder(Assistant.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .chatMemory(userBMemory)
                 .build();
 
@@ -236,7 +235,7 @@ public class MemoryExample {
 
         ChatMemory memory = MessageWindowChatMemory.withMaxMessages(20);
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -244,7 +243,7 @@ public class MemoryExample {
                 .build();
 
         Assistant assistant = AiServices.builder(Assistant.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .chatMemory(memory)
                 .build();
 
@@ -259,7 +258,17 @@ public class MemoryExample {
         for (int i = 0; i < history.size(); i++) {
             ChatMessage msg = history.get(i);
             String type = msg.type().toString();
-            String content = msg.text();
+            // ChatMessage 接口本身没有 text()，需要根据具体类型获取文本内容
+            String content;
+            if (msg instanceof UserMessage) {
+                content = ((UserMessage) msg).singleText();
+            } else if (msg instanceof dev.langchain4j.data.message.SystemMessage) {
+                content = ((dev.langchain4j.data.message.SystemMessage) msg).text();
+            } else if (msg instanceof AiMessage) {
+                content = ((AiMessage) msg).text();
+            } else {
+                content = msg.toString();
+            }
             System.out.println("[" + (i + 1) + "] " + type + ": " + content);
         }
 

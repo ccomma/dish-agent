@@ -4,7 +4,7 @@ import com.example.langchain4jdemo.Config;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.parser.TextDocumentParser;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
@@ -27,7 +27,7 @@ public class DocumentRAGExample {
     }
 
     // 模拟的 RAG 处理器 - 实际应用中会用向量数据库
-    static String performRAG(String question, String documentContent, ChatLanguageModel model) {
+    static String performRAG(String question, String documentContent, ChatModel model) {
         // 简单关键词匹配 - 实际应用中应使用向量相似度检索
         String relevantContext = documentContent;
 
@@ -44,7 +44,7 @@ public class DocumentRAGExample {
                         "\n\n【问题】" + question +
                         "\n\n请根据文档内容回答，如果文档没有相关信息请说明。";
 
-        return model.generate(prompt);
+        return model.chat(prompt);
     }
 
     static String extractSection(String content, String keyword) {
@@ -69,7 +69,7 @@ public class DocumentRAGExample {
         try {
             // 1. 创建聊天模型
             System.out.println("\n1. 创建Minimax聊天模型...");
-            ChatLanguageModel chatModel = OpenAiChatModel.builder()
+            ChatModel chatModel = OpenAiChatModel.builder()
                     .apiKey(config.getApiKey())
                     .baseUrl(config.getBaseUrl())
                     .modelName(config.getModel())
@@ -101,7 +101,7 @@ public class DocumentRAGExample {
             // 3. 创建 RAG 助手
             System.out.println("\n3. 创建RAG助手...");
             RAGAssistant assistant = AiServices.builder(RAGAssistant.class)
-                    .chatLanguageModel(chatModel)
+                    .chatModel(chatModel)
                     .chatMemory(MessageWindowChatMemory.withMaxMessages(10))
                     .build();
 

@@ -1,7 +1,7 @@
 package com.example.langchain4jdemo.output;
 
 import com.example.langchain4jdemo.Config;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
@@ -22,7 +22,7 @@ public class OutputParserExample {
         System.out.println("║ 示例1: 手动 JSON 解析                            ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -37,7 +37,7 @@ public class OutputParserExample {
             只返回 JSON，不要其他文字。
             """;
 
-        String jsonResponse = model.generate(prompt);
+        String jsonResponse = model.chat(prompt);
         System.out.println("原始响应:\n" + jsonResponse);
 
         // 手动解析（实际项目中建议使用 Jackson 或 Gson）
@@ -75,7 +75,7 @@ public class OutputParserExample {
         System.out.println("║ 示例2: AiServices 自动映射                        ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -89,7 +89,7 @@ public class OutputParserExample {
         }
 
         PersonExtractor extractor = AiServices.builder(PersonExtractor.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .build();
 
         String text = "张三是一位35岁的软件工程师，他喜欢编程、阅读和徒步旅行。他在一家科技公司工作。";
@@ -113,7 +113,7 @@ public class OutputParserExample {
         System.out.println("║ 示例3: 列表数据解析                            ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -127,7 +127,7 @@ public class OutputParserExample {
         }
 
         ListExtractor extractor = AiServices.builder(ListExtractor.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .build();
 
         String text = """
@@ -151,7 +151,7 @@ public class OutputParserExample {
         System.out.println("║ 示例4: 枚举解析                                ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -164,7 +164,7 @@ public class OutputParserExample {
         }
 
         SentimentAnalyzer analyzer = AiServices.builder(SentimentAnalyzer.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .build();
 
         String[] reviews = {
@@ -194,7 +194,7 @@ public class OutputParserExample {
         System.out.println("║ 示例5: 多字段复杂对象解析                        ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -208,7 +208,7 @@ public class OutputParserExample {
         }
 
         OrderExtractor extractor = AiServices.builder(OrderExtractor.class)
-                .chatLanguageModel(model)
+                .chatModel(model)
                 .build();
 
         String orderText = """

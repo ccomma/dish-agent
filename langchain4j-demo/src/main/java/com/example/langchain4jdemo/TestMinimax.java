@@ -1,6 +1,6 @@
 package com.example.langchain4jdemo;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 /**
@@ -20,7 +20,7 @@ public class TestMinimax {
             System.out.println("  API_KEY: " + (config.getApiKey().isEmpty() ? "未设置" : "已设置(" + config.getApiKey().substring(0, 8) + "...)"));
 
             // 创建模型
-            ChatLanguageModel model = OpenAiChatModel.builder()
+            ChatModel model = OpenAiChatModel.builder()
                     .apiKey(config.getApiKey())
                     .baseUrl(config.getBaseUrl())
                     .modelName(config.getModel())
@@ -30,7 +30,7 @@ public class TestMinimax {
             System.out.println("\n发送测试请求到 Minimax...");
 
             // 发送简单测试请求
-            String response = model.generate("请回复'连接成功'，只需要回复这四个字");
+            String response = model.chat("请回复'连接成功'，只需要回复这四个字");
 
             System.out.println("\n收到 Minimax 响应:");
             System.out.println("  " + response);

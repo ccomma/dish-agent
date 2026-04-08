@@ -1,6 +1,8 @@
 # 餐饮智能助手 (dish-agent)
 
-基于 LangChain4j 的多 Agent 协同架构实现，用于餐饮 SaaS 场景的智能客服系统。
+基于 LangChain4j 1.x 的多 Agent 协同架构实现，用于餐饮 SaaS 场景的智能客服系统。
+
+**重要**：每次对项目进行修改后，请检查是否需要同步更新本文件（和 CLAUDE.md），以确保文档与代码保持一致。
 
 ## 项目概述
 
@@ -15,9 +17,11 @@
 
 ```
 dish-agent/
-├── langchain4j-demo/          # 教学演示模块（6个独立示例）
-├── langchain4j-enterprise/    # 企业级多Agent架构
-└── pom.xml                   # Maven 父 POM
+├── pom.xml                   # Maven 父 POM
+├── settings-test.xml         # Maven 配置（指向 Maven Central）
+├── langchain4j-demo/        # 教学演示模块（11个独立示例）
+├── langchain4j-enterprise/  # 企业级多Agent架构
+└── README.md
 ```
 
 ## 快速开始
@@ -41,17 +45,17 @@ MINIMAX_MODEL=minimax-m2.7
 ### 3. 编译项目
 
 ```bash
-mvn clean compile
+mvn clean compile -s settings-test.xml
 ```
 
 ### 4. 运行多 Agent 架构
 
 ```bash
 # 启动交互式对话
-mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.Bootstrap"
+mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.Bootstrap" -s settings-test.xml
 
 # 或运行模块测试
-mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.MultiAgentTest"
+mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.MultiAgentTest" -s settings-test.xml
 ```
 
 ## 功能演示
@@ -152,12 +156,12 @@ com.enterprise.langchain4j/
 
 ## 依赖说明
 
-- **langchain4j** (0.31.0): LangChain4j 核心库
+- **langchain4j** (1.12.2): LangChain4j 核心库
 - **langchain4j-open-ai**: OpenAI/Minimax 集成
 - **langchain4j-ollama**: Ollama 本地模型集成
-- **langchain4j-milvus**: Milvus 向量数据库集成
-- **langchain4j-elasticsearch**: Elasticsearch 向量存储集成
 - **slf4j-simple**: 日志实现
+
+> 注意：使用 `settings-test.xml` 编译以指向 Maven Central
 
 ## 学习路径
 

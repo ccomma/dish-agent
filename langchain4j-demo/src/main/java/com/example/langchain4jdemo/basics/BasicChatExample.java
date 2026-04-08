@@ -1,7 +1,7 @@
 package com.example.langchain4jdemo.basics;
 
 import com.example.langchain4jdemo.Config;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 /**
@@ -17,7 +17,7 @@ public class BasicChatExample {
         Config config = Config.getInstance();
 
         // 创建Minimax聊天模型
-        ChatLanguageModel model = OpenAiChatModel.builder()
+        ChatModel model = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -46,7 +46,7 @@ public class BasicChatExample {
 
             try {
                 // 发送消息到模型并获取响应
-                String response = model.generate(userInput);
+                String response = model.chat(userInput);
                 System.out.println("AI: " + response);
                 System.out.println();
             } catch (Exception e) {

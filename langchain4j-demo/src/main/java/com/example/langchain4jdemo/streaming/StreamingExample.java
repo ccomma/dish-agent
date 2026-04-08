@@ -1,7 +1,7 @@
 package com.example.langchain4jdemo.streaming;
 
 import com.example.langchain4jdemo.Config;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 import java.util.concurrent.CompletableFuture;
@@ -22,7 +22,7 @@ public class StreamingExample {
         System.out.println("=== LangChain4j 流式输出概念示例 ===\n");
 
         try {
-            ChatLanguageModel model = OpenAiChatModel.builder()
+            ChatModel model = OpenAiChatModel.builder()
                     .apiKey(config.getApiKey())
                     .baseUrl(config.getBaseUrl())
                     .modelName(config.getModel())
@@ -44,7 +44,7 @@ public class StreamingExample {
             CompletableFuture<String> futureResponse = CompletableFuture.supplyAsync(() -> {
                 try {
                     // 模拟流式输出的逐字显示效果
-                    String response = model.generate(userMessage);
+                    String response = model.chat(userMessage);
                     // 简单模拟：分批返回
                     return response;
                 } catch (Exception e) {
@@ -83,7 +83,7 @@ public class StreamingExample {
             System.out.print("AI: ");
 
             long start = System.currentTimeMillis();
-            String response = model.generate(query);
+            String response = model.chat(query);
             long elapsed = System.currentTimeMillis() - start;
 
             System.out.println(response);
@@ -118,7 +118,7 @@ public class StreamingExample {
                 final int idx = i;
                 futures[i] = CompletableFuture.supplyAsync(() -> {
                     try {
-                        return model.generate(queries[idx]);
+                        return model.chat(queries[idx]);
                     } catch (Exception e) {
                         return "错误: " + e.getMessage();
                     }

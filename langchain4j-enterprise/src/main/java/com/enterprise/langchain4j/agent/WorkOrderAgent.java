@@ -8,7 +8,7 @@ import com.enterprise.langchain4j.tool.InventoryTools;
 import com.enterprise.langchain4j.tool.OrderTools;
 import com.enterprise.langchain4j.tool.RefundTools;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
@@ -53,7 +53,7 @@ public class WorkOrderAgent {
     public WorkOrderAgent() {
         Config config = Config.getInstance();
 
-        ChatLanguageModel chatModel = OpenAiChatModel.builder()
+        ChatModel chatModel = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
@@ -65,7 +65,7 @@ public class WorkOrderAgent {
         this.refundTools = new RefundTools();
 
         this.assistant = AiServices.builder(WorkOrderAssistant.class)
-                .chatLanguageModel(chatModel)
+                .chatModel(chatModel)
                 .chatMemory(MessageWindowChatMemory.withMaxMessages(20))
                 .tools(inventoryTools, orderTools, refundTools)
                 .build();
