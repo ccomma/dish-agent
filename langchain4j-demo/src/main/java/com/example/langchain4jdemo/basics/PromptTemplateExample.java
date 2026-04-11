@@ -1,6 +1,8 @@
 package com.example.langchain4jdemo.basics;
 
 import com.example.langchain4jdemo.Config;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -42,8 +44,8 @@ public class PromptTemplateExample {
         String userMessageText = "请解释Java中的多态性，并给出一个简单的示例。";
 
         // 构建消息列表并发送请求
-        List<dev.langchain4j.data.message.ChatMessage> messages = List.of(
-                dev.langchain4j.data.message.SystemMessage.from(systemMessageText),
+        List<ChatMessage> messages = List.of(
+                SystemMessage.from(systemMessageText),
                 UserMessage.from(userMessageText)
         );
 
@@ -86,15 +88,15 @@ public class PromptTemplateExample {
         System.out.println("║ 示例3: 对话历史示例                              ║");
         System.out.println("╚════════════════════════════════════════════════════╝\n");
 
-        List<dev.langchain4j.data.message.ChatMessage> conversation = List.of(
-                dev.langchain4j.data.message.SystemMessage.from("你是一个友好的聊天机器人。"),
+        List<ChatMessage> conversation = List.of(
+                SystemMessage.from("你是一个友好的聊天机器人。"),
                 UserMessage.from("你好！"),
                 UserMessage.from("你能告诉我今天的天气如何吗？")
         );
 
         ChatResponse conversationResponse = model.chat(conversation);
         System.out.println("对话历史:");
-        for (dev.langchain4j.data.message.ChatMessage msg : conversation) {
+        for (ChatMessage msg : conversation) {
             System.out.println("  " + msg.type() + ": " + msg);
         }
         System.out.println("\n最新响应: " + conversationResponse.aiMessage().text());
@@ -132,7 +134,7 @@ public class PromptTemplateExample {
         System.out.println(filledComplex.text());
 
         ChatResponse complexChatResponse = model.chat(List.of(
-            dev.langchain4j.data.message.SystemMessage.from("你是一个技术顾问"),
+            SystemMessage.from("你是一个技术顾问"),
             UserMessage.from(filledComplex.text())
         ));
         String complexResponse = complexChatResponse.aiMessage().text();

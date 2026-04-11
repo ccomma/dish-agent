@@ -44,7 +44,10 @@ public class DocumentRAGExample {
         for (String line : lines) {
             if (line.contains(keyword) || !relevant.isEmpty()) {
                 relevant.append(line).append("\n");
-                if (relevant.length() > 500) break; // 限制长度
+                // 限制长度
+                if (relevant.length() > 500) {
+                    break;
+                }
             }
         }
         return !relevant.isEmpty() ? relevant.toString() : content;
