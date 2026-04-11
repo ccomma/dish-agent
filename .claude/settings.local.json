@@ -33,7 +33,18 @@
       "Bash(javap -cp ~/.m2/repository/dev/langchain4j/langchain4j/1.12.2/langchain4j-1.12.2.jar:~/.m2/repository/dev/langchain4j/langchain4j-core/1.12.2/langchain4j-core-1.12.2.jar dev.langchain4j.service.AiServices)",
       "Bash(javap:*)",
       "Bash(mvn dependency:tree -s settings-test.xml)",
-      "Bash(unzip -l langchain4j-core-1.12.2.jar)"
+      "Bash(unzip -l langchain4j-core-1.12.2.jar)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(mvn dependency:list -s settings-test.xml)",
+      "Bash(curl -s \"https://search.maven.org/solrsearch/select?q=g:dev.langchain4j+AND+a:langchain4j-milvus&rows=5&wt=json\")",
+      "Bash(curl -s \"https://search.maven.org/solrsearch/select?q=g:dev.langchain4j+AND+a:langchain4j*&rows=50&wt=json\")",
+      "Bash(curl -s \"https://search.maven.org/solrsearch/select?q=g:dev.langchain4j+AND+a:langchain4j-milvus-spring-boot-starter&rows=5&wt=json\")",
+      "Bash(curl:*)",
+      "Read(//private/tmp/langchain4j检查/**)",
+      "Bash(unzip -q ~/.m2/repository/dev/langchain4j/langchain4j-core/1.12.2/langchain4j-core-1.12.2.jar)",
+      "Bash(find . -name *Rerank* -o -name *Scoring*)",
+      "Bash(find /tmp/langchain4j检查 -name *ReRank* -o -name *ReRank*)"
     ]
   }
 }
