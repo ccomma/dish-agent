@@ -3,12 +3,8 @@ package com.example.langchain4jdemo.rag;
 import com.example.langchain4jdemo.Config;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.parser.TextDocumentParser;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.service.AiServices;
-import dev.langchain4j.service.SystemMessage;
-import dev.langchain4j.service.UserMessage;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,12 +15,6 @@ import java.nio.file.Paths;
  * 演示如何加载文档并进行问答
  */
 public class DocumentRAGExample {
-
-    // RAG 助手接口 - 使用 @SystemMessage 和 @UserMessage 组合
-    interface RAGAssistant {
-        @SystemMessage("你是一个有帮助的AI助手，基于提供的文档内容回答用户的问题。如果文档中没有相关信息，请说明你不知道。")
-        String answer(@UserMessage String question);
-    }
 
     // 模拟的 RAG 处理器 - 实际应用中会用向量数据库
     static String performRAG(String question, String documentContent, ChatModel model) {
@@ -98,15 +88,8 @@ public class DocumentRAGExample {
 
             System.out.println("文档内容:\n" + documentText);
 
-            // 3. 创建 RAG 助手
-            System.out.println("\n3. 创建RAG助手...");
-            RAGAssistant assistant = AiServices.builder(RAGAssistant.class)
-                    .chatModel(chatModel)
-                    .chatMemory(MessageWindowChatMemory.withMaxMessages(10))
-                    .build();
-
-            // 4. 测试问答
-            System.out.println("\n4. 测试基于文档的问答:");
+            // 3. 测试问答（使用 RAG 方式）
+            System.out.println("\n3. 测试基于文档的问答:");
             System.out.println("--- 开始问答 ---\n");
 
             String[] testQuestions = {
@@ -123,8 +106,8 @@ public class DocumentRAGExample {
                 System.out.println();
             }
 
-            // 5. 演示从文件加载文档
-            System.out.println("5. 演示从文件加载文档进行RAG:");
+            // 4. 演示从文件加载文档
+            System.out.println("4. 演示从文件加载文档进行RAG:");
 
             // 创建示例文本文件
             Path tempFile = Paths.get("example_document.txt");
