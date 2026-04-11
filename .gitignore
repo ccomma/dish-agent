@@ -81,6 +81,9 @@ hs_err_pid*
 # IntelliJ
 out/
 
+# Claude Code
+.claude/
+
 # NetBeans
 /nbproject/private/
 /build/
