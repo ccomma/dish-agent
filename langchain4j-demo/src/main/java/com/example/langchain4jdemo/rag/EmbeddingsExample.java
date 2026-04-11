@@ -7,21 +7,24 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+import dev.langchain4j.model.output.Response;
 import dev.langchain4j.model.scoring.ScoringModel;
 import dev.langchain4j.model.cohere.CohereScoringModel;
 import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.rag.query.Query;
+import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 
 import java.util.*;
 
 /**
  * 向量嵌入（Embeddings）和相似度检索完整示例
  * 演示 EmbeddingModel 和 EmbeddingStore 的完整使用流程
- *
+ * <p>
  * 示例结构：
  * - 示例1: InMemoryEmbeddingStore 写入和相似度搜索
  * - 示例2: 完整 RAG 流程（检索+生成）
@@ -63,12 +66,12 @@ public class EmbeddingsExample {
 
             // 准备文档
             List<String> documents = List.of(
-                "LangChain4j 支持多种 LLM 提供商，包括 OpenAI、Anthropic、Google 等",
-                "Java 17 引入了密封类、模式匹配等新特性",
-                "Spring Boot 是构建微服务的主流框架",
-                "人工智能助手可以处理问答、翻译、代码生成等任务",
-                "Redis 是一个高性能的键值存储数据库",
-                "LangChain4j 提供了 Chain、Memory、Tool 等核心组件"
+                    "LangChain4j 支持多种 LLM 提供商，包括 OpenAI、Anthropic、Google 等",
+                    "Java 17 引入了密封类、模式匹配等新特性",
+                    "Spring Boot 是构建微服务的主流框架",
+                    "人工智能助手可以处理问答、翻译、代码生成等任务",
+                    "Redis 是一个高性能的键值存储数据库",
+                    "LangChain4j 提供了 Chain、Memory、Tool 等核心组件"
             );
 
             System.out.println("【使用 EmbeddingModel 将文档转换为向量并存储】\n");
@@ -85,9 +88,9 @@ public class EmbeddingsExample {
 
             // 相似度搜索
             String[] queries = {
-                "Java LLM 开发框架有哪些？",
-                "微服务用什么框架？",
-                "AI 助手能做什么？"
+                    "Java LLM 开发框架有哪些？",
+                    "微服务用什么框架？",
+                    "AI 助手能做什么？"
             };
 
             for (String query : queries) {
@@ -125,22 +128,22 @@ public class EmbeddingsExample {
             EmbeddingStore<TextSegment> ragStore = new InMemoryEmbeddingStore<>();
 
             List<String> knowledgeBase = List.of(
-                "LangChain4j 的核心概念包括：\n" +
-                "1. Models - 与各种 LLM 交互\n" +
-                "2. Prompts - 提示模板管理\n" +
-                "3. Memory - 对话状态保持\n" +
-                "4. Chains - 多步骤处理序列\n" +
-                "5. Agents - 使用工具的 AI 实体",
+                    "LangChain4j 的核心概念包括：\n" +
+                            "1. Models - 与各种 LLM 交互\n" +
+                            "2. Prompts - 提示模板管理\n" +
+                            "3. Memory - 对话状态保持\n" +
+                            "4. Chains - 多步骤处理序列\n" +
+                            "5. Agents - 使用工具的 AI 实体",
 
-                "RAG（检索增强生成）的工作流程：\n" +
-                "1. 检索（Retrieval）- 从知识库找到相关信息\n" +
-                "2. 增强（Augmentation）- 将检索结果融入提示\n" +
-                "3. 生成（Generation）- LLM 生成最终回答",
+                    "RAG（检索增强生成）的工作流程：\n" +
+                            "1. 检索（Retrieval）- 从知识库找到相关信息\n" +
+                            "2. 增强（Augmentation）- 将检索结果融入提示\n" +
+                            "3. 生成（Generation）- LLM 生成最终回答",
 
-                "LangChain4j 支持的向量存储：\n" +
-                "- InMemoryEmbeddingStore - 测试用\n" +
-                "- MilvusEmbeddingStore - 分布式向量数据库\n" +
-                "- ElasticsearchEmbeddingStore - 全文搜索引擎"
+                    "LangChain4j 支持的向量存储：\n" +
+                            "- InMemoryEmbeddingStore - 测试用\n" +
+                            "- MilvusEmbeddingStore - 分布式向量数据库\n" +
+                            "- ElasticsearchEmbeddingStore - 全文搜索引擎"
             );
 
             // 将知识库存入 RAG EmbeddingStore
@@ -193,8 +196,7 @@ public class EmbeddingsExample {
 
             try {
                 // 创建 MilvusEmbeddingStore
-                dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore milvusStore =
-                    dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore.builder()
+                MilvusEmbeddingStore milvusStore = MilvusEmbeddingStore.builder()
                         .host(milvusHost)
                         .port(milvusPort)
                         .collectionName("langchain4j_demo")
@@ -203,10 +205,10 @@ public class EmbeddingsExample {
 
                 // 准备文档
                 List<String> milvusDocs = List.of(
-                    "LangChain4j 支持多种 LLM 提供商，包括 OpenAI、Anthropic、Google 等",
-                    "Java 17 引入了密封类、模式匹配等新特性",
-                    "Spring Boot 是构建微服务的主流框架",
-                    "人工智能助手可以处理问答、翻译、代码生成等任务"
+                        "LangChain4j 支持多种 LLM 提供商，包括 OpenAI、Anthropic、Google 等",
+                        "Java 17 引入了密封类、模式匹配等新特性",
+                        "Spring Boot 是构建微服务的主流框架",
+                        "人工智能助手可以处理问答、翻译、代码生成等任务"
                 );
 
                 System.out.println("\n【写入文档到 Milvus 向量数据库】");
@@ -255,11 +257,11 @@ public class EmbeddingsExample {
             // 准备知识库
             EmbeddingStore<TextSegment> rerankStore = new InMemoryEmbeddingStore<>();
             List<String> rerankKnowledge = List.of(
-                "LangChain4j 的核心概念包括 Models、Prompts、Memory、Chains、Agents",
-                "Java 17 引入了密封类、模式匹配、记录类等新特性",
-                "Spring Boot 是最流行的微服务框架，内置 Tomcat",
-                "RAG 结合了信息检索和文本生成技术",
-                "Cohere 提供Embedding和Rerank API服务"
+                    "LangChain4j 的核心概念包括 Models、Prompts、Memory、Chains、Agents",
+                    "Java 17 引入了密封类、模式匹配、记录类等新特性",
+                    "Spring Boot 是最流行的微服务框架，内置 Tomcat",
+                    "RAG 结合了信息检索和文本生成技术",
+                    "Cohere 提供Embedding和Rerank API服务"
             );
 
             System.out.println("【建立知识库】");
@@ -288,53 +290,57 @@ public class EmbeddingsExample {
 
             // Step 2: Reranking - 使用 Cohere ScoringModel 重排序
             String cohereApiKey = System.getenv("COHERE_API_KEY");
-            if (cohereApiKey != null && !cohereApiKey.isEmpty()) {
-                System.out.println("\n[Step 2] 使用 Cohere ScoringModel 进行 Reranking...");
-
-                ScoringModel scoringModel = CohereScoringModel.builder()
-                        .apiKey(cohereApiKey)
-                        .build();
-
-                // 对每个检索结果用 ScoringModel 打分
-                List<TextSegment> segments = initialResult.matches().stream()
-                        .map(m -> m.embedded())
-                        .toList();
-
-                // ScoringModel 对所有文本片段打分
-                var scores = scoringModel.scoreAll(segments, rerankQuery);
-
-                if (scores != null && scores.content() != null) {
-                    List<Double> scoreList = scores.content();
-
-                    // 将分数与对应文本关联
-                    List<Map.Entry<Double, TextSegment>> scored = new ArrayList<>();
-                    for (int i = 0; i < segments.size(); i++) {
-                        scored.add(Map.entry(scoreList.get(i), segments.get(i)));
-                    }
-
-                    // 按分数降序排序
-                    scored.sort((a, b) -> Double.compare(b.getKey(), a.getKey()));
-
-                    System.out.println("\n[Step 2'] Reranking 后 top-3:");
-                    for (int i = 0; i < Math.min(3, scored.size()); i++) {
-                        var entry = scored.get(i);
-                        System.out.println("  [" + (i + 1) + "] (Cohere分数:" + String.format("%.3f", entry.getKey()) + ") "
-                                + entry.getValue().text());
-                    }
-
-                    // Step 3: 使用 Reranking 结果进行 RAG
-                    String topDoc = scored.get(0).getValue().text();
-                    String rerankPrompt = "基于以下信息回答问题。\n\n【相关信息】\n" + topDoc +
-                            "\n\n【问题】" + rerankQuery + "\n\n请根据提供的信息回答。";
-
-                    System.out.println("\n[Step 3] 使用 Reranking 结果生成回答...");
-                    String rerankAnswer = chatModel.chat(rerankPrompt);
-                    System.out.println("\n【RAG 最终回答】\n" + rerankAnswer);
-                }
-            } else {
+            if (cohereApiKey == null || cohereApiKey.isEmpty()) {
                 System.out.println("\n跳过 Reranking 演示（需要配置 COHERE_API_KEY）");
                 System.out.println("设置环境变量: export COHERE_API_KEY=your_api_key");
+                return;
             }
+
+            System.out.println("\n[Step 2] 使用 Cohere ScoringModel 进行 Reranking...");
+
+            ScoringModel scoringModel = CohereScoringModel.builder()
+                    .apiKey(cohereApiKey)
+                    .build();
+
+            // 对每个检索结果用 ScoringModel 打分
+            List<TextSegment> segments = initialResult.matches().stream()
+                    .map(EmbeddingMatch::embedded)
+                    .toList();
+
+            // ScoringModel 对所有文本片段打分
+            Response<List<Double>> scores = scoringModel.scoreAll(segments, rerankQuery);
+
+            if (scores == null) {
+                return;
+            }
+
+            scores.content();
+            List<Double> scoreList = scores.content();
+
+            // 将分数与对应文本关联
+            List<Map.Entry<Double, TextSegment>> scored = new ArrayList<>();
+            for (int i = 0; i < segments.size(); i++) {
+                scored.add(Map.entry(scoreList.get(i), segments.get(i)));
+            }
+
+            // 按分数降序排序
+            scored.sort((a, b) -> Double.compare(b.getKey(), a.getKey()));
+
+            System.out.println("\n[Step 2'] Reranking 后 top-3:");
+            for (int i = 0; i < Math.min(3, scored.size()); i++) {
+                var entry = scored.get(i);
+                System.out.println("  [" + (i + 1) + "] (Cohere分数:" + String.format("%.3f", entry.getKey()) + ") "
+                        + entry.getValue().text());
+            }
+
+            // Step 3: 使用 Reranking 结果进行 RAG
+            String topDoc = scored.get(0).getValue().text();
+            String rerankPrompt = "基于以下信息回答问题。\n\n【相关信息】\n" + topDoc +
+                    "\n\n【问题】" + rerankQuery + "\n\n请根据提供的信息回答。";
+
+            System.out.println("\n[Step 3] 使用 Reranking 结果生成回答...");
+            String rerankAnswer = chatModel.chat(rerankPrompt);
+            System.out.println("\n【RAG 最终回答】\n" + rerankAnswer);
 
             System.out.println("\n══════════════════════════════════════════════════════════\n");
             System.out.println("【Embedding 工作流程总结】");

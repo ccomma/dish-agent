@@ -20,7 +20,7 @@
 - 链式调用 (ChainExample)
 - 流式输出 (StreamingExample)
 - 输出解析 (OutputParserExample)
-- 向量嵌入 (EmbeddingsExample)
+- 向量嵌入 (EmbeddingsExample) - 包括 InMemory/Milvus 向量存储和 Reranking 演示
 
 ### langchain4j-enterprise 模块（企业级多Agent架构）
 基于**多Agent协同架构**的餐饮智能助手，包含：
@@ -231,6 +231,55 @@ public class MyTools {
 ChatMemory memory = MessageWindowChatMemory.withMaxMessages(20);
 ```
 
+### 7. EmbeddingStore 和相似度搜索
+```java
+// 使用 OpenAI EmbeddingModel
+EmbeddingModel embeddingModel = OpenAiEmbeddingModel.builder()
+    .apiKey(apiKey)
+    .modelName("text-embedding-3-small")
+    .build();
+
+// 存入向量
+EmbeddingStore<TextSegment> store = new InMemoryEmbeddingStore<>();
+store.add(embeddingModel.embed("文本").content(), TextSegment.from("文本"));
+
+// 相似度搜索
+EmbeddingSearchResult<TextSegment> result = store.search(
+    EmbeddingSearchRequest.builder()
+        .queryEmbedding(embeddingModel.embed("查询").content())
+        .maxResults(3)
+        .build()
+);
+
+// 遍历结果
+for (EmbeddingMatch<TextSegment> match : result.matches()) {
+    System.out.println("[" + match.score() + "] " + match.embedded().text());
+}
+```
+
+### 8. RAG with Reranking
+```java
+// 初步检索
+EmbeddingSearchResult<TextSegment> initial = store.search(
+    EmbeddingSearchRequest.builder()
+        .queryEmbedding(queryEmbedding)
+        .maxResults(5)
+        .build()
+);
+
+// Reranking 使用 Cohere ScoringModel
+ScoringModel scoringModel = CohereScoringModel.builder()
+    .apiKey(cohereApiKey)
+    .build();
+
+List<TextSegment> segments = initial.matches().stream()
+    .map(EmbeddingMatch::embedded)
+    .toList();
+
+Response<List<Double>> scores = scoringModel.scoreAll(segments, queryText);
+// 按分数排序后取 top-k
+```
+
 ## 依赖管理
 
 - **LangChain4j 版本**: `1.12.2`（在 pom.xml 中定义）
@@ -239,6 +288,8 @@ ChatMemory memory = MessageWindowChatMemory.withMaxMessages(20);
   - `langchain4j` (核心)
   - `langchain4j-open-ai` (OpenAI/Minimax 兼容)
   - `langchain4j-ollama` (本地模型)
+  - `langchain4j-milvus` (Milvus 向量数据库)
+  - `langchain4j-cohere` (Cohere Reranking)
 
 ## 环境要求
 
