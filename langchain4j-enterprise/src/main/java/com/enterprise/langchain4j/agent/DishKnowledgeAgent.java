@@ -88,22 +88,13 @@ public class DishKnowledgeAgent {
             // 2. 构建响应（附带后续操作提示）
             List<String> hints = generateFollowUpHints(context.getIntent());
 
-            return AgentResponse.success(answer, "DishKnowledgeAgent", context)
-                    .getFollowUpHints().isEmpty()
-                    ? AgentResponse.builder()
-                        .success(true)
-                        .content(answer)
-                        .agentName("DishKnowledgeAgent")
-                        .context(context)
-                        .followUpHints(hints)
-                        .build()
-                    : AgentResponse.builder()
-                        .success(true)
-                        .content(answer)
-                        .agentName("DishKnowledgeAgent")
-                        .context(context)
-                        .followUpHints(hints)
-                        .build();
+            return AgentResponse.builder()
+                    .success(true)
+                    .content(answer)
+                    .agentName("DishKnowledgeAgent")
+                    .context(context)
+                    .followUpHints(hints)
+                    .build();
 
         } catch (Exception e) {
             return AgentResponse.failure(

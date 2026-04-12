@@ -22,7 +22,7 @@ public class AgentResponse {
         this.content = builder.content;
         this.agentName = builder.agentName;
         this.context = builder.context;
-        this.followUpHints = builder.followUpHints != null ? builder.followUpHints : Collections.emptyList();
+        this.followUpHints = builder.followUpHints != null ? new ArrayList<>(builder.followUpHints) : Collections.emptyList();
     }
 
     public static Builder builder() {

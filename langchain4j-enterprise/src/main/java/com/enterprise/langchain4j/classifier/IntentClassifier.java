@@ -3,179 +3,69 @@ package com.enterprise.langchain4j.classifier;
 import com.enterprise.langchain4j.Config;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
+import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.UserMessage;
 
 /**
  * 意图分类器
- * 使用关键词匹配 + LLM 辅助判断实现用户意图识别
+ * 使用 AiServices 结构化输出实现 LLM-based 意图识别
  *
  * 设计原理：
- * - 首先使用关键词规则快速识别明确意图
- * - 对于模糊输入，使用 LLM 辅助判断
+ * - 使用 AiServices 将 LLM 响应直接映射到 IntentType 枚举
+ * - 支持零样本分类，泛化能力强
  */
 public class IntentClassifier {
 
-    // 关键词到意图的映射
-    private static final Set<String> GREETING_WORDS = new HashSet<>(Arrays.asList(
-        "你好", "您好", "hi", "hello", "嗨", "嘿", "早上好", "晚上好", "下午好"
-    ));
+    // LLM 分类服务接口 - 使用结构化输出
+    interface IntentClassificationService {
 
-    private static final Set<String> DISH_WORDS = new HashSet<>(Arrays.asList(
-        "菜", "肉", "鱼", "鸡", "豆腐", "蔬菜", "口味", "辣", "咸", "甜"
-    ));
+        @SystemMessage("""
+            你是一个餐饮智能助手的话务分流系统。
+            根据用户输入，判断其意图属于以下哪种类型：
 
-    private static final Set<String> COOKING_WORDS = new HashSet<>(Arrays.asList(
-        "做", "做菜", "烹饪", "炒", "煮", "蒸", "炸", "煎", "红烧", "清蒸"
-    ));
+            GREETING - 问候语（你好、hi、hello、早安等）
+            GENERAL_CHAT - 通用闲聊（打招呼、心情、天气、闲聊等）
+            DISH_QUESTION - 菜品相关问题（口味、推荐、做法，好不好吃等）
+            DISH_INGREDIENT - 菜品成分问题（什么肉、什么材料、包含什么等）
+            DISH_COOKING_METHOD - 菜品烹饪问题（怎么做、用什么方法烹饪等）
+            POLICY_QUESTION - 餐厅政策问题（退款政策、优惠活动、会员规则等）
+            QUERY_INVENTORY - 库存查询（还有吗、有货吗、卖完没、剩多少等）
+            QUERY_ORDER - 订单查询（订单状态、到了没、订单号、什么时候送等）
+            CREATE_REFUND - 退款申请（要退款、退单、取消订单、售后等）
+            UNKNOWN - 无法判断时返回此类型
 
-    private static final Set<String> INGREDIENT_WORDS = new HashSet<>(Arrays.asList(
-        "成分", "材料", "用料", "什么肉", "什么鱼", "有什么", "包含", "含有"
-    ));
+            只输出意图类型名称，不要解释。
+            """)
+        IntentType classify(@UserMessage String userInput);
+    }
 
-    private static final Set<String> POLICY_WORDS = new HashSet<>(Arrays.asList(
-        "退款", "退菜", "退货", "优惠", "打折", "会员", "规则", "政策", "怎么退", "如何退"
-    ));
-
-    private static final Set<String> INVENTORY_WORDS = new HashSet<>(Arrays.asList(
-        "库存", "还有", "有货", "卖完", "售罄", "有没有货", "剩"
-    ));
-
-    private static final Set<String> ORDER_WORDS = new HashSet<>(Arrays.asList(
-        "订单", "到了", "状态", "送到哪", "订单号", "什么时候送", "发货"
-    ));
-
-    private static final Set<String> REFUND_WORDS = new HashSet<>(Arrays.asList(
-        "申请退款", "要退款", "退款", "售后", "退单", "取消订单"
-    ));
-
-    private final ChatModel chatModel;
+    private final IntentClassificationService classificationService;
 
     public IntentClassifier() {
         Config config = Config.getInstance();
 
-        this.chatModel = OpenAiChatModel.builder()
+        ChatModel chatModel = OpenAiChatModel.builder()
                 .apiKey(config.getApiKey())
                 .baseUrl(config.getBaseUrl())
                 .modelName(config.getModel())
-                .temperature(0.0)
+                .temperature(0.0)  // 确定性输出
                 .build();
+
+        // 使用 AiServices 创建结构化分类服务
+        this.classificationService = AiServices.create(IntentClassificationService.class, chatModel);
     }
 
     /**
-     * 使用关键词匹配分类用户意图
+     * 使用 LLM 分类用户意图
      */
     public IntentType classify(String userInput) {
-        String input = userInput.toLowerCase();
-
-        // 检查是否包含各类型关键词
-        if (containsAny(input, GREETING_WORDS)) {
-            return IntentType.GREETING;
-        }
-
-        if (containsAny(input, REFUND_WORDS)) {
-            return IntentType.CREATE_REFUND;
-        }
-
-        if (containsAny(input, ORDER_WORDS)) {
-            return IntentType.QUERY_ORDER;
-        }
-
-        if (containsAny(input, INVENTORY_WORDS)) {
-            return IntentType.QUERY_INVENTORY;
-        }
-
-        if (containsAny(input, POLICY_WORDS)) {
-            return IntentType.POLICY_QUESTION;
-        }
-
-        if (containsAny(input, INGREDIENT_WORDS)) {
-            return IntentType.DISH_INGREDIENT;
-        }
-
-        if (containsAny(input, COOKING_WORDS)) {
-            return IntentType.DISH_COOKING_METHOD;
-        }
-
-        if (containsAny(input, DISH_WORDS)) {
-            return IntentType.DISH_QUESTION;
-        }
-
-        // 无法通过关键词判断，询问LLM
-        return classifyWithLLM(userInput);
-    }
-
-    private boolean containsAny(String input, Set<String> keywords) {
-        for (String keyword : keywords) {
-            if (input.contains(keyword.toLowerCase())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 使用 LLM 辅助判断（用于模糊输入）
-     */
-    private IntentType classifyWithLLM(String userInput) {
         try {
-            String prompt = "判断这个用户输入属于哪种意图：\n" +
-                    "GREETING=问候, GENERAL_CHAT=闲聊, DISH_QUESTION=菜品问题\n" +
-                    "POLICY_QUESTION=规则问题, QUERY_INVENTORY=库存查询, QUERY_ORDER=订单查询\n" +
-                    "CREATE_REFUND=退款申请, UNKNOWN=未知\n\n" +
-                    "用户输入：" + userInput + "\n\n只输出意图名称，例如 GREETING";
-
-            String result = chatModel.chat(prompt).trim().toUpperCase();
-
-            // 提取意图名称
-            for (IntentType intent : IntentType.values()) {
-                if (result.contains(intent.name())) {
-                    return intent;
-                }
-            }
-
-            return IntentType.UNKNOWN;
+            return classificationService.classify(userInput);
         } catch (Exception e) {
-            System.err.println("LLM分类失败: " + e.getMessage());
+            System.err.println("意图分类失败: " + e.getMessage());
             return IntentType.GENERAL_CHAT;
         }
     }
 
-    /**
-     * 打印分类结果
-     */
-    public void debugClassify(String userInput) {
-        IntentType intent = classify(userInput);
-        System.out.println("输入: " + userInput);
-        System.out.println("识别意图: " + intent.name() + " (" + intent.getDescription() + ")");
-    }
-
-    /**
-     * 批量测试意图分类
-     */
-    public static void main(String[] args) {
-        System.out.println("=== 意图分类器测试 ===\n");
-
-        IntentClassifier classifier = new IntentClassifier();
-
-        String[] testInputs = {
-            "你好啊",
-            "今天心情不错",
-            "这菜辣不辣",
-            "宫保鸡丁用的是什么肉",
-            "红烧肉怎么做",
-            "怎么申请退款",
-            "我的订单到哪了",
-            "门店还有宫保鸡丁吗",
-            "我要退菜",
-            "你是谁"
-        };
-
-        for (String input : testInputs) {
-            classifier.debugClassify(input);
-            System.out.println();
-        }
-    }
 }
