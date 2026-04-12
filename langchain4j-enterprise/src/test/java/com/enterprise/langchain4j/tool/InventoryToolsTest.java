@@ -19,90 +19,135 @@ class InventoryToolsTest {
 
     @Test
     void testQueryAllInventory_ReturnsValidResponse() {
-        String result = inventoryTools.queryAllInventory("STORE_001");
+        InventoryResult result = inventoryTools.queryAllInventory("STORE_001");
 
         assertNotNull(result);
-        assertTrue(result.contains("STORE_001"));
-        assertTrue(result.contains("宫保鸡丁"));
-        assertTrue(result.contains("麻婆豆腐"));
-        assertTrue(result.contains("红烧肉"));
+        assertTrue(result.isSuccess());
+        assertEquals("STORE_001", result.getStoreId());
+        assertNotNull(result.getItems());
+        assertFalse(result.getItems().isEmpty());
+
+        // Check items exist
+        assertTrue(result.getItems().stream().anyMatch(i -> i.getDishName().equals("宫保鸡丁")));
+        assertTrue(result.getItems().stream().anyMatch(i -> i.getDishName().equals("麻婆豆腐")));
+        assertTrue(result.getItems().stream().anyMatch(i -> i.getDishName().equals("红烧肉")));
     }
 
     @Test
     void testQueryAllInventory_StoreNotFound() {
-        String result = inventoryTools.queryAllInventory("INVALID_STORE");
+        InventoryResult result = inventoryTools.queryAllInventory("INVALID_STORE");
 
         assertNotNull(result);
-        assertTrue(result.contains("门店不存在") || result.contains("INVALID_STORE"));
+        assertFalse(result.isSuccess());
+        assertTrue(result.getErrorMessage().contains("门店不存在") || result.getErrorMessage().contains("INVALID_STORE"));
     }
 
     @Test
     void testQueryInventory_SpecificDish() {
-        String result = inventoryTools.queryInventory("STORE_001", "宫保鸡丁");
+        InventoryResult result = inventoryTools.queryInventory("STORE_001", "宫保鸡丁");
 
         assertNotNull(result);
-        assertTrue(result.contains("宫保鸡丁"));
-        assertTrue(result.contains("50") || result.contains("有货") || result.contains("库存"));
+        assertTrue(result.isSuccess());
+        assertEquals(1, result.getItems().size());
+        assertEquals("宫保鸡丁", result.getItems().get(0).getDishName());
+        assertEquals(50, result.getItems().get(0).getQuantity());
+        assertEquals("有货", result.getItems().get(0).getStatus());
     }
 
     @Test
     void testQueryInventory_DishNotFound() {
-        String result = inventoryTools.queryInventory("STORE_001", "不存在的菜品");
+        InventoryResult result = inventoryTools.queryInventory("STORE_001", "不存在的菜品");
 
         assertNotNull(result);
-        assertTrue(result.contains("没有菜品") || result.contains("不存在的菜品"));
+        assertFalse(result.isSuccess());
+        assertTrue(result.getErrorMessage().contains("没有菜品") || result.getErrorMessage().contains("不存在的菜品"));
     }
 
     @Test
     void testQueryInventory_StoreNotFound() {
-        String result = inventoryTools.queryInventory("INVALID_STORE", "宫保鸡丁");
+        InventoryResult result = inventoryTools.queryInventory("INVALID_STORE", "宫保鸡丁");
 
         assertNotNull(result);
-        assertTrue(result.contains("门店不存在") || result.contains("INVALID_STORE"));
+        assertFalse(result.isSuccess());
+        assertTrue(result.getErrorMessage().contains("门店不存在") || result.getErrorMessage().contains("INVALID_STORE"));
     }
 
     @Test
     void testQueryInventory_NullDishName_ReturnsAllInventory() {
-        String result = inventoryTools.queryInventory("STORE_001", null);
+        InventoryResult result = inventoryTools.queryInventory("STORE_001", null);
 
         assertNotNull(result);
-        assertTrue(result.contains("STORE_001"));
+        assertTrue(result.isSuccess());
+        assertEquals("STORE_001", result.getStoreId());
+        assertTrue(result.getItems().size() > 1);
     }
 
     @Test
     void testQueryInventory_EmptyDishName_ReturnsAllInventory() {
-        String result = inventoryTools.queryInventory("STORE_001", "");
+        InventoryResult result = inventoryTools.queryInventory("STORE_001", "");
 
         assertNotNull(result);
-        assertTrue(result.contains("STORE_001"));
+        assertTrue(result.isSuccess());
+        assertEquals("STORE_001", result.getStoreId());
+        assertTrue(result.getItems().size() > 1);
     }
 
     @Test
     void testGetStoreList_ReturnsValidResponse() {
-        String result = inventoryTools.getStoreList();
+        StoreListResult result = inventoryTools.getStoreList();
 
         assertNotNull(result);
-        assertTrue(result.contains("STORE_001"));
-        assertTrue(result.contains("STORE_002"));
-        assertTrue(result.contains("STORE_003"));
-        assertTrue(result.contains("门店") || result.contains("可用"));
+        assertNotNull(result.getStores());
+        assertEquals(3, result.getStores().size());
+
+        assertTrue(result.getStores().stream().anyMatch(s -> s.getStoreId().equals("STORE_001")));
+        assertTrue(result.getStores().stream().anyMatch(s -> s.getStoreId().equals("STORE_002")));
+        assertTrue(result.getStores().stream().anyMatch(s -> s.getStoreId().equals("STORE_003")));
+    }
+
+    @Test
+    void testGetStoreList_StoreDetails() {
+        StoreListResult result = inventoryTools.getStoreList();
+
+        StoreListResult.StoreInfo store1 = result.getStores().get(0);
+        assertEquals("STORE_001", store1.getStoreId());
+        assertEquals("旗舰店", store1.getName());
+        assertEquals("北京市朝阳区建国路88号", store1.getAddress());
     }
 
     @Test
     void testQueryInventory_SoldOutDish() {
-        String result = inventoryTools.queryInventory("STORE_002", "宫保鸡丁");
+        InventoryResult result = inventoryTools.queryInventory("STORE_002", "宫保鸡丁");
 
         assertNotNull(result);
-        assertTrue(result.contains("宫保鸡丁"));
-        assertTrue(result.contains("售罄") || result.contains("0"));
+        assertTrue(result.isSuccess());
+        assertEquals("宫保鸡丁", result.getItems().get(0).getDishName());
+        assertEquals(0, result.getItems().get(0).getQuantity());
+        assertEquals("售罄", result.getItems().get(0).getStatus());
     }
 
     @Test
     void testQueryInventory_LowStockDish() {
-        String result = inventoryTools.queryInventory("STORE_002", "红烧肉");
+        // STORE_002 has 红烧肉 with quantity 10, which is "有货"
+        // For testing "库存紧张", we would need < 10
+        InventoryResult result = inventoryTools.queryInventory("STORE_002", "红烧肉");
 
         assertNotNull(result);
-        assertTrue(result.contains("红烧肉"));
-        assertTrue(result.contains("库存紧张") || result.contains("10"));
+        assertTrue(result.isSuccess());
+        assertEquals("红烧肉", result.getItems().get(0).getDishName());
+        assertEquals(10, result.getItems().get(0).getQuantity());
+        assertEquals("有货", result.getItems().get(0).getStatus());
+    }
+
+    @Test
+    void testInventoryItem_Status() {
+        InventoryResult.InventoryItem soldOut = new InventoryResult.InventoryItem("测试", 0);
+        assertEquals("售罄", soldOut.getStatus());
+
+        InventoryResult.InventoryItem lowStock = new InventoryResult.InventoryItem("测试", 5);
+        assertEquals("库存紧张", lowStock.getStatus());
+
+        InventoryResult.InventoryItem inStock = new InventoryResult.InventoryItem("测试", 50);
+        assertEquals("有货", inStock.getStatus());
     }
 }

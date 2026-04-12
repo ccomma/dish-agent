@@ -4,7 +4,6 @@ import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.P;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +15,7 @@ public class RefundTools {
 
     // ===== 模拟数据 =====
     private final List<OrderReference> orders = new ArrayList<>();
-    private final List<RefundTicket> refundTickets = new ArrayList<>();
+    private final List<RefundResult> refundTickets = new ArrayList<>();
 
     public RefundTools() {
         initMockData();
@@ -32,7 +31,7 @@ public class RefundTools {
      * 创建退款/售后工单
      */
     @Tool("创建退款或售后工单")
-    public String createRefundTicket(
+    public RefundResult createRefundTicket(
             @P("订单号") String orderId,
             @P("退款原因") String reason) {
 
@@ -43,36 +42,36 @@ public class RefundTools {
             .orElse(null);
 
         if (order == null) {
-            return "未找到订单: " + orderId + "\n无法创建退款工单。\n" +
-                   "注意：只有已完成或配送中的订单可以申请退款。";
+            return RefundResult.failure("未找到订单: " + orderId + "\n无法创建退款工单。\n" +
+                   "注意：只有已完成或配送中的订单可以申请退款。");
         }
 
         // 生成工单号
         String ticketId = "TK" + System.currentTimeMillis();
+        LocalDateTime createTime = LocalDateTime.now();
 
         // 创建工单
-        RefundTicket ticket = new RefundTicket(ticketId, orderId, reason);
+        RefundResult ticket = RefundResult.success(ticketId, orderId, reason, "待处理", createTime);
         refundTickets.add(ticket);
 
-        return "【退款工单创建成功】\n\n" + ticket.toString() +
-               "\n\n备注：退款将在3-7个工作日内原路返回。";
+        return ticket;
     }
 
     /**
      * 查询退款工单状态
      */
     @Tool("查询退款工单的状态")
-    public String queryRefundStatus(@P("工单号") String ticketId) {
-        RefundTicket ticket = refundTickets.stream()
-            .filter(t -> t.ticketId.equals(ticketId))
+    public RefundResult queryRefundStatus(@P("工单号") String ticketId) {
+        RefundResult ticket = refundTickets.stream()
+            .filter(t -> ticketId.equals(t.getTicketId()))
             .findFirst()
             .orElse(null);
 
         if (ticket == null) {
-            return "未找到工单: " + ticketId + "\n请确认工单号是否正确。";
+            return RefundResult.failure("未找到工单: " + ticketId + "\n请确认工单号是否正确。");
         }
 
-        return "【工单查询结果】\n\n" + ticket.toString();
+        return ticket;
     }
 
     // ===== 数据模型 =====
@@ -85,29 +84,6 @@ public class RefundTools {
             this.orderId = orderId;
             this.storeId = storeId;
             this.items = items;
-        }
-    }
-
-    public static class RefundTicket {
-        public String ticketId;
-        public String orderId;
-        public String reason;
-        public String status;
-        public LocalDateTime createTime;
-
-        public RefundTicket(String ticketId, String orderId, String reason) {
-            this.ticketId = ticketId;
-            this.orderId = orderId;
-            this.reason = reason;
-            this.status = "待处理";
-            this.createTime = LocalDateTime.now();
-        }
-
-        @Override
-        public String toString() {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            return String.format("工单号: %s\n订单号: %s\n原因: %s\n状态: %s\n创建时间: %s",
-                    ticketId, orderId, reason, status, createTime.format(fmt));
         }
     }
 }

@@ -3,7 +3,9 @@ package com.enterprise.langchain4j.tool;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.P;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,35 +41,31 @@ public class InventoryTools {
      * 查询指定门店的所有菜品库存
      */
     @Tool("查询指定门店的菜品库存")
-    public String queryAllInventory(@P("门店ID") String storeId) {
+    public InventoryResult queryAllInventory(@P("门店ID") String storeId) {
         Map<String, Integer> inventory = storeInventory.get(storeId);
         if (inventory == null) {
-            return "门店不存在: " + storeId;
+            return InventoryResult.failure("门店不存在: " + storeId);
         }
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("【门店 ").append(storeId).append(" 库存情况】\n\n");
-
+        List<InventoryResult.InventoryItem> items = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : inventory.entrySet()) {
-            String status = entry.getValue() == 0 ? "售罄" : (entry.getValue() < 10 ? "库存紧张" : "有货");
-            sb.append("• ").append(entry.getKey()).append(": ")
-              .append(entry.getValue()).append("份 (").append(status).append(")\n");
+            items.add(new InventoryResult.InventoryItem(entry.getKey(), entry.getValue()));
         }
 
-        return sb.toString();
+        return InventoryResult.success(storeId, items);
     }
 
     /**
      * 查询指定门店的特定菜品库存
      */
     @Tool("查询指定门店的特定菜品库存")
-    public String queryInventory(
+    public InventoryResult queryInventory(
             @P("门店ID") String storeId,
             @P("菜品名称") String dishName) {
 
         Map<String, Integer> inventory = storeInventory.get(storeId);
         if (inventory == null) {
-            return "门店不存在: " + storeId;
+            return InventoryResult.failure("门店不存在: " + storeId);
         }
 
         if (dishName == null || dishName.isEmpty()) {
@@ -76,21 +74,25 @@ public class InventoryTools {
 
         Integer quantity = inventory.get(dishName);
         if (quantity == null) {
-            return "门店 " + storeId + " 没有菜品: " + dishName;
+            return InventoryResult.failure("门店 " + storeId + " 没有菜品: " + dishName);
         }
 
-        String status = quantity == 0 ? "售罄" : (quantity < 10 ? "库存紧张" : "有货");
-        return "【库存查询结果】\n• " + dishName + ": " + quantity + "份 (" + status + ")";
+        List<InventoryResult.InventoryItem> items = List.of(
+            new InventoryResult.InventoryItem(dishName, quantity)
+        );
+        return InventoryResult.success(storeId, items);
     }
 
     /**
      * 获取门店列表
      */
     @Tool("获取所有可用门店的信息")
-    public String getStoreList() {
-        return "【可用门店列表】\n\n" +
-               "• STORE_001 (旗舰店) - 北京市朝阳区建国路88号\n" +
-               "• STORE_002 (二分店) - 上海市浦东新区世纪大道100号\n" +
-               "• STORE_003 (三分店) - 广州市天河区天河路99号";
+    public StoreListResult getStoreList() {
+        List<StoreListResult.StoreInfo> stores = List.of(
+            new StoreListResult.StoreInfo("STORE_001", "旗舰店", "北京市朝阳区建国路88号"),
+            new StoreListResult.StoreInfo("STORE_002", "二分店", "上海市浦东新区世纪大道100号"),
+            new StoreListResult.StoreInfo("STORE_003", "三分店", "广州市天河区天河路99号")
+        );
+        return new StoreListResult(stores);
     }
 }

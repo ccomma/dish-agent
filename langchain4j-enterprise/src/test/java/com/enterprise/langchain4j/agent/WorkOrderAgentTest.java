@@ -3,15 +3,16 @@ package com.enterprise.langchain4j.agent;
 import com.enterprise.langchain4j.classifier.IntentType;
 import com.enterprise.langchain4j.context.AgentContext;
 import com.enterprise.langchain4j.contract.AgentResponse;
-import com.enterprise.langchain4j.tool.InventoryTools;
-import com.enterprise.langchain4j.tool.OrderTools;
-import com.enterprise.langchain4j.tool.RefundTools;
+import com.enterprise.langchain4j.tool.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -72,8 +73,10 @@ class WorkOrderAgentTest {
                 .userInput("门店还有宫保鸡丁吗")
                 .build();
 
+        InventoryResult mockResult = InventoryResult.success("STORE_001",
+                List.of(new InventoryResult.InventoryItem("宫保鸡丁", 50)));
         when(inventoryTools.queryInventory("STORE_001", "宫保鸡丁"))
-                .thenReturn("【库存查询结果】\n• 宫保鸡丁: 50份 (有货)");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 
@@ -93,8 +96,10 @@ class WorkOrderAgentTest {
                 .userInput("门店有什么菜")
                 .build();
 
+        InventoryResult mockResult = InventoryResult.success("STORE_001",
+                List.of(new InventoryResult.InventoryItem("宫保鸡丁", 50)));
         when(inventoryTools.queryAllInventory("STORE_001"))
-                .thenReturn("【门店 STORE_001 库存情况】\n\n• 宫保鸡丁: 50份");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 
@@ -113,8 +118,10 @@ class WorkOrderAgentTest {
                 .userInput("查询订单12345状态")
                 .build();
 
+        OrderResult mockResult = OrderResult.success("12345", "STORE_001", "宫保鸡丁 x1",
+                "配送中", LocalDateTime.now());
         when(orderTools.queryOrderStatus("12345"))
-                .thenReturn("【订单查询结果】\n\n订单号: 12345\n状态: 配送中");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 
@@ -153,8 +160,10 @@ class WorkOrderAgentTest {
                 .userInput("订单67890要退款因为菜品质量不好")
                 .build();
 
+        RefundResult mockResult = RefundResult.success("TK1234567890", "67890", "菜品质量不好",
+                "待处理", LocalDateTime.now());
         when(refundTools.createRefundTicket("67890", "菜品质量不好"))
-                .thenReturn("【退款工单创建成功】\n\n工单号: TK1234567890");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 
@@ -192,8 +201,10 @@ class WorkOrderAgentTest {
                 .userInput("订单67890要退款")
                 .build();
 
+        RefundResult mockResult = RefundResult.success("TK9876543210", "67890", "用户主动申请退款",
+                "待处理", LocalDateTime.now());
         when(refundTools.createRefundTicket("67890", "用户主动申请退款"))
-                .thenReturn("【退款工单创建成功】\n\n工单号: TK1234567890");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 
@@ -226,14 +237,16 @@ class WorkOrderAgentTest {
                 .dishName("麻婆豆腐")
                 .build();
 
+        InventoryResult mockResult = InventoryResult.success("STORE_001",
+                List.of(new InventoryResult.InventoryItem("麻婆豆腐", 30)));
         when(inventoryTools.queryInventory("STORE_001", "麻婆豆腐"))
-                .thenReturn("【库存查询结果】\n• 麻婆豆腐: 30份 (有货)");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 
         assertNotNull(response.getFollowUpHints());
         assertFalse(response.getFollowUpHints().isEmpty());
-        assertTrue(response.getFollowUpHints().size() == 2);
+        assertEquals(2, response.getFollowUpHints().size());
     }
 
     @Test
@@ -245,8 +258,10 @@ class WorkOrderAgentTest {
                 .orderId("11111")
                 .build();
 
+        OrderResult mockResult = OrderResult.success("11111", "STORE_001", "糖醋里脊 x1",
+                "已发货", LocalDateTime.now());
         when(orderTools.queryOrderStatus("11111"))
-                .thenReturn("【订单查询结果】\n\n订单号: 11111\n状态: 已发货");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 
@@ -265,8 +280,10 @@ class WorkOrderAgentTest {
                 .refundReason("等太久了")
                 .build();
 
+        RefundResult mockResult = RefundResult.success("TK9876543210", "22222", "等太久了",
+                "待处理", LocalDateTime.now());
         when(refundTools.createRefundTicket("22222", "等太久了"))
-                .thenReturn("【退款工单创建成功】\n\n工单号: TK9876543210");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 
@@ -285,8 +302,10 @@ class WorkOrderAgentTest {
                 .userInput("宫保鸡丁还有吗")
                 .build();
 
+        InventoryResult mockResult = InventoryResult.success("STORE_001",
+                List.of(new InventoryResult.InventoryItem("宫保鸡丁", 50)));
         when(inventoryTools.queryInventory("STORE_001", "宫保鸡丁"))
-                .thenReturn("【库存查询结果】\n• 宫保鸡丁: 50份 (有货)");
+                .thenReturn(mockResult);
 
         AgentResponse response = workOrderAgent.process(context);
 

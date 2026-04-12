@@ -19,97 +19,81 @@ class OrderToolsTest {
 
     @Test
     void testQueryOrderStatus_ExistingOrder() {
-        String result = orderTools.queryOrderStatus("12345");
+        OrderResult result = orderTools.queryOrderStatus("12345");
 
         assertNotNull(result);
-        assertTrue(result.contains("12345"));
-        assertTrue(result.contains("订单号") || result.contains("STORE_001"));
-        assertTrue(result.contains("宫保鸡丁") || result.contains("麻婆豆腐"));
+        assertTrue(result.isSuccess());
+        assertEquals("12345", result.getOrderId());
+        assertEquals("STORE_001", result.getStoreId());
+        assertTrue(result.getItems().contains("宫保鸡丁") || result.getItems().contains("麻婆豆腐"));
     }
 
     @Test
     void testQueryOrderStatus_AnotherExistingOrder() {
-        String result = orderTools.queryOrderStatus("67890");
+        OrderResult result = orderTools.queryOrderStatus("67890");
 
         assertNotNull(result);
-        assertTrue(result.contains("67890"));
-        assertTrue(result.contains("红烧肉"));
+        assertTrue(result.isSuccess());
+        assertEquals("67890", result.getOrderId());
+        assertTrue(result.getItems().contains("红烧肉"));
     }
 
     @Test
     void testQueryOrderStatus_OrderNotFound() {
-        String result = orderTools.queryOrderStatus("NON_EXISTENT");
+        OrderResult result = orderTools.queryOrderStatus("NON_EXISTENT");
 
         assertNotNull(result);
-        assertTrue(result.contains("未找到订单") || result.contains("NON_EXISTENT"));
+        assertFalse(result.isSuccess());
+        assertTrue(result.getErrorMessage().contains("未找到订单") || result.getErrorMessage().contains("NON_EXISTENT"));
     }
 
     @Test
-    void testOrderInfo_InnerClass() {
-        OrderTools.OrderInfo orderInfo = new OrderTools.OrderInfo(
-                "99999",
-                "STORE_003",
-                "测试菜品 x1",
-                "测试状态",
-                java.time.LocalDateTime.now()
-        );
+    void testOrderResult_SuccessFields() {
+        OrderResult result = orderTools.queryOrderStatus("12345");
 
-        assertEquals("99999", orderInfo.orderId);
-        assertEquals("STORE_003", orderInfo.storeId);
-        assertEquals("测试菜品 x1", orderInfo.items);
-        assertEquals("测试状态", orderInfo.status);
-        assertNotNull(orderInfo.createTime);
+        assertTrue(result.isSuccess());
+        assertEquals("12345", result.getOrderId());
+        assertEquals("STORE_001", result.getStoreId());
+        assertNotNull(result.getItems());
+        assertEquals("配送中", result.getStatus());
+        assertNotNull(result.getCreateTime());
     }
 
     @Test
-    void testOrderInfo_ToString() {
-        OrderTools.OrderInfo orderInfo = new OrderTools.OrderInfo(
-                "11111",
-                "STORE_001",
-                "糖醋里脊 x1, 鱼香肉丝 x1",
-                "已发货",
-                java.time.LocalDateTime.of(2024, 1, 15, 10, 30)
-        );
+    void testOrderResult_CompletedOrder() {
+        OrderResult result = orderTools.queryOrderStatus("67890");
 
-        String str = orderInfo.toString();
-
-        assertNotNull(str);
-        assertTrue(str.contains("11111"));
-        assertTrue(str.contains("STORE_001"));
-        assertTrue(str.contains("糖醋里脊"));
-        assertTrue(str.contains("鱼香肉丝"));
-        assertTrue(str.contains("已发货"));
+        assertTrue(result.isSuccess());
+        assertEquals("已完成", result.getStatus());
     }
 
     @Test
-    void testQueryOrderStatus_DeliveryOrder() {
-        String result = orderTools.queryOrderStatus("12345");
+    void testOrderResult_ShippedOrder() {
+        OrderResult result = orderTools.queryOrderStatus("11111");
+
+        assertTrue(result.isSuccess());
+        assertEquals("已发货", result.getStatus());
+    }
+
+    @Test
+    void testOrderResult_EmptyOrderId() {
+        OrderResult result = orderTools.queryOrderStatus("");
 
         assertNotNull(result);
-        assertTrue(result.contains("配送中"));
+        assertFalse(result.isSuccess());
+        assertTrue(result.getErrorMessage().contains("未找到订单"));
     }
 
     @Test
-    void testQueryOrderStatus_CompletedOrder() {
-        String result = orderTools.queryOrderStatus("67890");
+    void testOrderResult_FailureHasNoFields() {
+        OrderResult result = orderTools.queryOrderStatus("INVALID");
 
-        assertNotNull(result);
-        assertTrue(result.contains("已完成"));
-    }
-
-    @Test
-    void testQueryOrderStatus_ShippedOrder() {
-        String result = orderTools.queryOrderStatus("11111");
-
-        assertNotNull(result);
-        assertTrue(result.contains("已发货"));
-    }
-
-    @Test
-    void testQueryOrderStatus_EmptyOrderId() {
-        String result = orderTools.queryOrderStatus("");
-
-        assertNotNull(result);
-        assertTrue(result.contains("未找到订单"));
+        assertFalse(result.isSuccess());
+        assertNull(result.getOrderId());
+        assertNull(result.getStoreId());
+        assertNull(result.getItems());
+        assertNull(result.getStatus());
+        assertNull(result.getCreateTime());
+        assertNotNull(result.getErrorMessage());
     }
 }

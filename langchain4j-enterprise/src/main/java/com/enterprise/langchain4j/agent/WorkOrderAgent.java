@@ -4,9 +4,7 @@ import com.enterprise.langchain4j.Config;
 import com.enterprise.langchain4j.classifier.IntentType;
 import com.enterprise.langchain4j.context.AgentContext;
 import com.enterprise.langchain4j.contract.AgentResponse;
-import com.enterprise.langchain4j.tool.InventoryTools;
-import com.enterprise.langchain4j.tool.OrderTools;
-import com.enterprise.langchain4j.tool.RefundTools;
+import com.enterprise.langchain4j.tool.*;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
@@ -95,9 +93,9 @@ public class WorkOrderAgent {
 
         String result;
         if (dishName != null && !dishName.isEmpty()) {
-            result = inventoryTools.queryInventory(storeId, dishName);
+            result = formatInventoryResult(inventoryTools.queryInventory(storeId, dishName));
         } else {
-            result = inventoryTools.queryAllInventory(storeId);
+            result = formatInventoryResult(inventoryTools.queryAllInventory(storeId));
         }
 
         return AgentResponse.builder()
@@ -113,6 +111,26 @@ public class WorkOrderAgent {
     }
 
     /**
+     * 格式化库存结果
+     */
+    private String formatInventoryResult(InventoryResult result) {
+        if (!result.isSuccess()) {
+            return result.getErrorMessage();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("【门店 ").append(result.getStoreId()).append(" 库存情况】\n\n");
+
+        for (InventoryResult.InventoryItem item : result.getItems()) {
+            sb.append("• ").append(item.getDishName())
+              .append(": ").append(item.getQuantity())
+              .append("份 (").append(item.getStatus()).append(")\n");
+        }
+
+        return sb.toString();
+    }
+
+    /**
      * 处理订单查询
      */
     private AgentResponse handleOrderQuery(AgentContext context) {
@@ -125,8 +143,27 @@ public class WorkOrderAgent {
             );
         }
 
-        String result = orderTools.queryOrderStatus(orderId);
+        String result = formatOrderResult(orderTools.queryOrderStatus(orderId));
         return AgentResponse.success(result, "WorkOrderAgent", context);
+    }
+
+    /**
+     * 格式化订单结果
+     */
+    private String formatOrderResult(OrderResult result) {
+        if (!result.isSuccess()) {
+            return result.getErrorMessage();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("【订单查询结果】\n\n");
+        sb.append("• 订单号: ").append(result.getOrderId()).append("\n");
+        sb.append("• 门店: ").append(result.getStoreId()).append("\n");
+        sb.append("• 商品: ").append(result.getItems()).append("\n");
+        sb.append("• 状态: ").append(result.getStatus()).append("\n");
+        sb.append("• 下单时间: ").append(result.getCreateTime()).append("\n");
+
+        return sb.toString();
     }
 
     /**
@@ -148,7 +185,27 @@ public class WorkOrderAgent {
             reason = "用户主动申请退款";
         }
 
-        String result = refundTools.createRefundTicket(orderId, reason);
+        String result = formatRefundResult(refundTools.createRefundTicket(orderId, reason));
         return AgentResponse.success(result, "WorkOrderAgent", context);
+    }
+
+    /**
+     * 格式化退款结果
+     */
+    private String formatRefundResult(RefundResult result) {
+        if (!result.isSuccess()) {
+            return result.getErrorMessage();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("【退款工单创建成功】\n\n");
+        sb.append("• 工单号: ").append(result.getTicketId()).append("\n");
+        sb.append("• 订单号: ").append(result.getOrderId()).append("\n");
+        sb.append("• 原因: ").append(result.getReason()).append("\n");
+        sb.append("• 状态: ").append(result.getStatus()).append("\n");
+        sb.append("• 创建时间: ").append(result.getCreateTime()).append("\n\n");
+        sb.append("备注：退款将在3-7个工作日内原路返回。");
+
+        return sb.toString();
     }
 }
