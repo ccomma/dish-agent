@@ -5,6 +5,7 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.cohere.CohereScoringModel;
+import dev.langchain4j.model.input.PromptTemplate;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.model.scoring.ScoringModel;
@@ -378,27 +379,35 @@ public class RAGPipeline {
     }
 
     /**
+     * RAG 回答提示词模板
+     */
+    private static final PromptTemplate ANSWER_TEMPLATE = PromptTemplate.from(
+        "你是一个专业的餐饮智能助手。根据提供的参考信息，准确回答用户的问题。\n" +
+        "\n" +
+        "重要规则：\n" +
+        "- 必须基于参考信息回答，不要编造信息\n" +
+        "- 如果参考信息中没有相关内容，请明确告知用户\n" +
+        "- 回答要清晰，专业、易懂\n" +
+        "- 适当使用列表格式，让信息更易读\n" +
+        "\n" +
+        "{{context}}" +
+        "\n" +
+        "【用户问题】\n" +
+        "{{question}}"
+    );
+
+    /**
      * 使用 RAG 回答问题
      */
     public String answer(String question) {
         // 1. 检索相关文档
         String context = retrieve(question, 3);
 
-        // 2. 构建提示词
-        String prompt = String.format("""
-            你是一个专业的餐饮智能助手。根据提供的参考信息，准确回答用户的问题。
-
-            重要规则：
-            - 必须基于参考信息回答，不要编造信息
-            - 如果参考信息中没有相关内容，请明确告知用户
-            - 回答要清晰，专业、易懂
-            - 适当使用列表格式，让信息更易读
-
-            %s
-
-            【用户问题】
-            %s
-            """, context, question);
+        // 2. 使用 PromptTemplate 构建提示词
+        String prompt = ANSWER_TEMPLATE.apply(Map.of(
+            "context", context,
+            "question", question
+        )).text();
 
         // 3. 调用 LLM 生成
         return chatModel.chat(prompt);
