@@ -303,3 +303,23 @@ Response<List<Double>> scores = scoringModel.scoreAll(segments, queryText);
 2. **Ollama 服务未运行** - 使用 `ollama serve` 启动并拉取所需模型
 3. **编译错误** - 确保使用 Java 17+，运行 `mvn clean compile -s settings-test.xml`
 4. **Maven 仓库连接问题** - 使用 `settings-test.xml` 配置指向 Maven Central
+
+## 环境健康检查
+在开始任何工作之前，运行完整的环境检查。可使用 `env-health-check` skill 启动自动化检查。
+
+检查内容包括：Maven 仓库连接、凭证配置、依赖完整性、编译验证、API 版本兼容性。如发现问题会自动尝试修复或创建 Agent 处理。
+
+## 约束
+在建议任何命令之前，请先验证该命令是否存在于当前的 Claude Code 版本中。切勿在未确认已实现的情况下建议 /sessions、/history 或其他命令。
+
+## API 探索
+当使用不熟悉的库 API 时，可使用 Agent 工具来探索代码库，找到正确的方法签名后再进行实现。可使用 `api-explore` skill 来启动探索。
+
+## 并行 Agent 开发模式
+对于复杂功能，使用并行 Agent 模式同时开发。可使用 `parallel-dev` skill 来启动此模式。
+
+1. **impl**：负责编写核心业务逻辑
+2. **tests**：负责编写全面的测试套件
+3. **docs**：负责创建 README 和 API 文档
+
+此模式适用于所有模块（langchain4j-demo、langchain4j-enterprise）及未来新建模块。每个 Agent 独立工作，完成后合并并运行最终集成测试。
