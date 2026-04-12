@@ -54,8 +54,8 @@ mvn clean compile -s settings-test.xml
 # 启动交互式对话
 mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.Bootstrap" -s settings-test.xml
 
-# 或运行模块测试
-mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.MultiAgentTest" -s settings-test.xml
+# 运行单元测试
+mvn test -pl langchain4j-enterprise -s settings-test.xml
 ```
 
 ## 功能演示
@@ -148,8 +148,9 @@ com.enterprise.langchain4j/
 ├── classifier/               # 意图分类
 │   ├── IntentClassifier.java
 │   └── IntentType.java
-├── rag/                      # RAG管道
-│   └── RAGPipeline.java
+├── rag/                      # RAG管道（生产级向量检索）
+│   ├── RAGPipeline.java        # RAG管道（Milvus/InMemory + Cohere Reranking）
+│   └── EmbeddingService.java   # 向量嵌入服务
 ├── Bootstrap.java            # 启动入口
 └── Config.java               # 配置加载
 ```
@@ -157,11 +158,45 @@ com.enterprise.langchain4j/
 ## 依赖说明
 
 - **langchain4j** (1.12.2): LangChain4j 核心库
-- **langchain4j-open-ai**: OpenAI/Minimax 集成
+- **langchain4j-open-ai**: OpenAI/Minimax 集成（Embedding + Chat）
 - **langchain4j-ollama**: Ollama 本地模型集成
+- **langchain4j-milvus** (1.0.0-beta5): Milvus 向量数据库
+- **langchain4j-cohere** (1.0.0-beta5): Cohere Reranking
 - **slf4j-simple**: 日志实现
 
 > 注意：使用 `settings-test.xml` 编译以指向 Maven Central
+
+## 向量检索与 RAG
+
+### 架构
+
+生产级 RAG 使用两阶段检索 + 重排序：
+
+```
+用户问题 → Embedding → Milvus/InMemory (Top-5) → Cohere Reranking (Top-3) → LLM → 回答
+```
+
+### 配置
+
+在 `config.properties` 中配置向量存储：
+
+```properties
+VECTOR_STORE_TYPE=inmemory  # inmemory | milvus
+MILVUS_HOST=localhost
+MILVUS_PORT=19530
+MILVUS_COLLECTION=dish_knowledge
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSION=1536
+
+# Reranking（可选）
+COHERE_API_KEY=your_api_key
+```
+
+### 启动 Milvus（Docker）
+
+```bash
+docker run -d --name milvus -p 19530:19530 milvusdb/milvus:latest
+```
 
 ## 学习路径
 
@@ -174,8 +209,8 @@ com.enterprise.langchain4j/
    - StructuredOutputExample → 结构化输出
 
 2. **langchain4j-enterprise 模块**：学习企业级多 Agent 架构
-   - MultiAgentTest → 模块测试
    - Bootstrap → 启动入口
+   - 单元测试 → 验证各组件
    - 各 Agent 源码 → 架构设计
 
 ## 参考资源

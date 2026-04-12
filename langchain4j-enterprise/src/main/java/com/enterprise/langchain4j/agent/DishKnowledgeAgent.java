@@ -62,6 +62,9 @@ public class DishKnowledgeAgent {
 
         this.ragPipeline = new RAGPipeline();
 
+        System.out.println("[DishKnowledgeAgent] RAG pipeline initialized ("
+                + "vector store: " + config.getVectorStoreType() + ")");
+
         this.assistant = AiServices.builder(DishKnowledgeAssistant.class)
                 .chatModel(chatModel)
                 .chatMemory(MessageWindowChatMemory.withMaxMessages(10))

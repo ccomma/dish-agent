@@ -1,27 +1,37 @@
 package com.enterprise.langchain4j.rag;
 
 import com.enterprise.langchain4j.Config;
-import dev.langchain4j.data.document.Document;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.cohere.CohereScoringModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.scoring.ScoringModel;
+import dev.langchain4j.store.embedding.EmbeddingMatch;
+import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
+import dev.langchain4j.store.embedding.EmbeddingSearchResult;
+import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 
-import java.io.InputStream;
 import java.util.*;
 
 /**
- * RAG 管道（简化版）
+ * RAG 管道（生产级）
  *
- * 注意：由于 langchain4j-transformers 在某些版本中不可用，
- * 此实现使用关键词匹配进行检索作为演示。
- *
- * 在生产环境中，可以：
- * 1. 使用 OpenAI 的 text-embedding-3-small 或 text-embedding-3-large
- * 2. 部署独立的 Embedding 服务
- * 3. 使用云提供的向量数据库（如 Milvus + OpenAI Embedding）
+ * 使用两阶段检索 + 重排序：
+ * 1. 初步检索：Embedding → Milvus/InMemory 向量存储 → Top-5
+ * 2. 重排序：Cohere ScoringModel → 语义相关性打分 → Top-3
+ * 3. 生成：Top-3 上下文 + LLM → 最终回答
  */
 public class RAGPipeline {
 
+    private final EmbeddingService embeddingService;
+    private final EmbeddingStore<TextSegment> embeddingStore;
+    private final ScoringModel scoringModel;
     private final ChatModel chatModel;
+    private final boolean rerankingEnabled;
     private final Map<String, KnowledgeEntry> knowledgeBase;
 
     /**
@@ -31,30 +41,43 @@ public class RAGPipeline {
         String type;      // dish, policy
         String name;      // 名称
         String content;   // 完整内容
-        Set<String> keywords; // 关键词
 
         KnowledgeEntry(String type, String name, String content) {
             this.type = type;
             this.name = name;
             this.content = content;
-            this.keywords = extractKeywords(content);
-        }
-
-        Set<String> extractKeywords(String text) {
-            Set<String> keywords = new HashSet<>();
-            // 简单分词
-            String[] words = text.split("[，、。\\s（）()、]");
-            for (String word : words) {
-                if (word.length() >= 2) {
-                    keywords.add(word.toLowerCase());
-                }
-            }
-            return keywords;
         }
     }
 
     public RAGPipeline() {
         Config config = Config.getInstance();
+
+        // 初始化 Embedding 服务
+        this.embeddingService = new EmbeddingService();
+
+        // 初始化向量存储（根据配置）
+        String storeType = config.getVectorStoreType();
+        if ("milvus".equalsIgnoreCase(storeType)) {
+            this.embeddingStore = createMilvusStore(config);
+            System.out.println("[RAG] 使用 Milvus 向量存储: " + config.getMilvusHost() + ":" + config.getMilvusPort());
+        } else {
+            this.embeddingStore = new InMemoryEmbeddingStore<>();
+            System.out.println("[RAG] 使用 InMemory 向量存储（生产环境建议使用 Milvus）");
+        }
+
+        // 初始化重排序模型（可选）
+        String cohereApiKey = config.getCohereApiKey();
+        if (cohereApiKey != null && !cohereApiKey.isEmpty()) {
+            this.scoringModel = CohereScoringModel.builder()
+                    .apiKey(cohereApiKey)
+                    .build();
+            this.rerankingEnabled = true;
+            System.out.println("[RAG] Cohere Reranking 已启用");
+        } else {
+            this.scoringModel = null;
+            this.rerankingEnabled = false;
+            System.out.println("[RAG] Reranking 已禁用（未配置 COHERE_API_KEY）");
+        }
 
         // 初始化聊天模型
         this.chatModel = OpenAiChatModel.builder()
@@ -69,6 +92,29 @@ public class RAGPipeline {
 
         // 加载知识库
         loadKnowledgeBase();
+    }
+
+    /**
+     * 内部构造函数，用于测试和依赖注入
+     */
+    RAGPipeline(EmbeddingService embeddingService, EmbeddingStore<TextSegment> embeddingStore,
+                ScoringModel scoringModel, ChatModel chatModel, boolean rerankingEnabled) {
+        this.embeddingService = embeddingService;
+        this.embeddingStore = embeddingStore;
+        this.scoringModel = scoringModel;
+        this.chatModel = chatModel;
+        this.rerankingEnabled = rerankingEnabled;
+        this.knowledgeBase = new LinkedHashMap<>();
+    }
+
+    private MilvusEmbeddingStore createMilvusStore(Config config) {
+        System.out.println("[RAG] 连接 Milvus...");
+        return MilvusEmbeddingStore.builder()
+                .host(config.getMilvusHost())
+                .port(config.getMilvusPort())
+                .collectionName(config.getMilvusCollection())
+                .dimension(config.getEmbeddingDimension())
+                .build();
     }
 
     /**
@@ -125,6 +171,7 @@ public class RAGPipeline {
             配酒建议：可乐、啤酒、酸梅汤
             """;
         knowledgeBase.put("宫保鸡丁", new KnowledgeEntry("dish", "宫保鸡丁", gongbao));
+        addToVectorStore(gongbao);
 
         // 麻婆豆腐
         String mapo = """
@@ -166,6 +213,7 @@ public class RAGPipeline {
             配酒建议：米饭、啤酒、凉茶
             """;
         knowledgeBase.put("麻婆豆腐", new KnowledgeEntry("dish", "麻婆豆腐", mapo));
+        addToVectorStore(mapo);
 
         System.out.println("[RAG] 加载菜品: 宫保鸡丁, 麻婆豆腐");
     }
@@ -232,75 +280,101 @@ public class RAGPipeline {
                - 钻石会员：额外获得15%退款补偿+专属客服通道
             """;
         knowledgeBase.put("退款规则", new KnowledgeEntry("policy", "退款规则", refundPolicy));
+        addToVectorStore(refundPolicy);
 
         System.out.println("[RAG] 加载政策文档: 退款规则");
     }
 
     /**
+     * 添加文档到向量存储
+     */
+    private void addToVectorStore(String content) {
+        try {
+            Embedding embedding = embeddingService.embed(content);
+            TextSegment segment = TextSegment.from(content);
+            embeddingStore.add(embedding, segment);
+        } catch (Exception e) {
+            System.err.println("[RAG] 添加到向量存储失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 检索相关知识
-     * 使用关键词匹配 + 评分算法
+     * 两阶段检索: 1) 初步 top-5  2) Rerank → top-k
      */
     private String retrieve(String query, int topK) {
-        String[] queryWords = query.toLowerCase().split("[\\s，。？?！!、，]");
-        Set<String> queryKeywords = new HashSet<>();
-        for (String word : queryWords) {
-            if (word.length() >= 2) {
-                queryKeywords.add(word);
+        // 1. 生成查询向量
+        Embedding queryEmbedding = embeddingService.embed(query);
+
+        // 2. 初步检索 - top 5
+        EmbeddingSearchResult<TextSegment> initialResult = embeddingStore.search(
+                EmbeddingSearchRequest.builder()
+                        .queryEmbedding(queryEmbedding)
+                        .maxResults(5)
+                        .build()
+        );
+
+        List<TextSegment> segments = initialResult.matches().stream()
+                .map(EmbeddingMatch::embedded)
+                .toList();
+
+        List<TextSegment> finalSegments;
+
+        // 3. Reranking（如果启用）
+        if (rerankingEnabled && scoringModel != null && !segments.isEmpty()) {
+            Response<List<Double>> scores =
+                    scoringModel.scoreAll(segments, query);
+            List<Double> scoreList = scores.content();
+
+            // 关联分数与文本片段并排序
+            List<Map.Entry<Double, TextSegment>> scored = new ArrayList<>();
+            for (int i = 0; i < segments.size(); i++) {
+                scored.add(Map.entry(scoreList.get(i), segments.get(i)));
             }
+            scored.sort((a, b) -> Double.compare(b.getKey(), a.getKey()));
+
+            // 取 top-k
+            finalSegments = scored.stream()
+                    .limit(topK)
+                    .map(Map.Entry::getValue)
+                    .toList();
+
+            System.out.println("[RAG] Reranking: " + initialResult.matches().size()
+                    + " → " + finalSegments.size() + " (top-" + topK + ")");
+        } else {
+            // 无 reranking，直接取 top-k
+            finalSegments = segments.stream().limit(topK).toList();
+            System.out.println("[RAG] 检索: " + finalSegments.size() + " 个结果");
         }
 
-        // 计算每个条目的相关性分数
-        List<Map.Entry<String, KnowledgeEntry>> scored = new ArrayList<>();
-        for (Map.Entry<String, KnowledgeEntry> entry : knowledgeBase.entrySet()) {
-            KnowledgeEntry ke = entry.getValue();
-            int matchCount = 0;
-            for (String keyword : queryKeywords) {
-                if (ke.keywords.contains(keyword) || ke.content.toLowerCase().contains(keyword)) {
-                    matchCount++;
-                }
-            }
-            if (matchCount > 0) {
-                scored.add(entry);
-            }
-        }
-
-        // 按匹配度排序
-        scored.sort((a, b) -> {
-            int scoreA = countMatches(a.getValue(), queryKeywords);
-            int scoreB = countMatches(b.getValue(), queryKeywords);
-            return Integer.compare(scoreB, scoreA);
-        });
-
-        // 构建上下文
+        // 4. 构建上下文
         StringBuilder context = new StringBuilder();
         context.append("【参考信息】\n\n");
 
-        int count = 0;
-        for (Map.Entry<String, KnowledgeEntry> entry : scored) {
-            if (count >= topK) break;
-            KnowledgeEntry ke = entry.getValue();
-            context.append("─".repeat(40)).append("\n");
-            context.append("【").append(ke.name).append("】(").append(ke.type).append(")\n");
-            context.append(ke.content).append("\n\n");
-            count++;
-        }
-
-        if (count == 0) {
+        if (finalSegments.isEmpty()) {
             context.append("未找到直接相关的参考信息。\n");
+        } else {
+            for (TextSegment segment : finalSegments) {
+                String name = extractNameFromSegment(segment.text());
+                context.append("─".repeat(40)).append("\n");
+                context.append("【").append(name).append("】\n");
+                context.append(segment.text()).append("\n\n");
+            }
         }
 
         return context.toString();
     }
 
-    private int countMatches(KnowledgeEntry ke, Set<String> queryKeywords) {
-        int count = 0;
-        String contentLower = ke.content.toLowerCase();
-        for (String keyword : queryKeywords) {
-            if (contentLower.contains(keyword)) {
-                count++;
-            }
+    /**
+     * 从文本片段中提取名称
+     */
+    private String extractNameFromSegment(String text) {
+        if (text.startsWith("【") && text.contains("】")) {
+            int start = 1;
+            int end = text.indexOf("】");
+            return text.substring(start, end);
         }
-        return count;
+        return "未知";
     }
 
     /**
@@ -334,7 +408,7 @@ public class RAGPipeline {
      * 演示 RAG 问答
      */
     public static void main(String[] args) {
-        System.out.println("=== RAG 管道演示 ===\n");
+        System.out.println("=== RAG 管道演示（生产级） ===\n");
 
         RAGPipeline rag = new RAGPipeline();
 

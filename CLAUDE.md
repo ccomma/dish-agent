@@ -108,9 +108,7 @@ dish-agent/
 ├── langchain4j-enterprise/           # 企业级多Agent模块
 │   └── src/main/java/com/enterprise/langchain4j/
 │       ├── Bootstrap.java            # [启动入口]
-│       ├── MultiAgentTest.java       # [模块测试]
 │       ├── Config.java
-│       ├── DishConsultingAgentTest.java
 │       ├── agent/                    # Agent 实现
 │       │   ├── OrchestrationAgent.java  # 编排协调层
 │       │   ├── RoutingAgent.java       # 前置路由Agent
@@ -128,8 +126,9 @@ dish-agent/
 │       ├── classifier/               # 意图分类
 │       │   ├── IntentClassifier.java
 │       │   └── IntentType.java
-│       └── rag/                     # RAG管道
-│           └── RAGPipeline.java
+│       └── rag/                     # RAG管道（生产级向量检索）
+│           ├── RAGPipeline.java        # RAG管道（Milvus/InMemory + Cohere Reranking）
+│           └── EmbeddingService.java   # 向量嵌入服务
 ├── run_example.sh
 ├── README.md
 └── CLAUDE.md

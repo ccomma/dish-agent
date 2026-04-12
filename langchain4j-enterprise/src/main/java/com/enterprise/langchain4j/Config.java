@@ -63,4 +63,32 @@ public class Config {
     public String getVectorStoreType() {
         return properties.getProperty("VECTOR_STORE_TYPE", "inmemory");
     }
+
+    public String getMilvusHost() {
+        return properties.getProperty("MILVUS_HOST", "localhost");
+    }
+
+    public int getMilvusPort() {
+        return Integer.parseInt(properties.getProperty("MILVUS_PORT", "19530"));
+    }
+
+    public String getMilvusCollection() {
+        return properties.getProperty("MILVUS_COLLECTION", "dish_knowledge");
+    }
+
+    public String getEmbeddingModel() {
+        return properties.getProperty("EMBEDDING_MODEL", "text-embedding-3-small");
+    }
+
+    public int getEmbeddingDimension() {
+        return Integer.parseInt(properties.getProperty("EMBEDDING_DIMENSION", "1536"));
+    }
+
+    public String getCohereApiKey() {
+        String apiKey = properties.getProperty("COHERE_API_KEY");
+        if (apiKey == null || apiKey.isEmpty() || apiKey.equals("your_cohere_api_key_here")) {
+            return null;
+        }
+        return apiKey;
+    }
 }

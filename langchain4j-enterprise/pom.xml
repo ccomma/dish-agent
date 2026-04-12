@@ -42,6 +42,20 @@
             <artifactId>slf4j-simple</artifactId>
         </dependency>
 
+        <!-- Milvus Vector Store -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-milvus</artifactId>
+            <version>1.0.0-beta5</version>
+        </dependency>
+
+        <!-- Cohere Reranking -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-cohere</artifactId>
+            <version>1.0.0-beta5</version>
+        </dependency>
+
         <!-- Jackson -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
