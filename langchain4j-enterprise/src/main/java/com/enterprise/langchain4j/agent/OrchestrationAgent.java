@@ -137,7 +137,9 @@ public class OrchestrationAgent {
                 break;
             }
 
-            if (userInput.isEmpty()) continue;
+            if (userInput.isEmpty()) {
+                continue;
+            }
 
             long startTime = System.currentTimeMillis();
 

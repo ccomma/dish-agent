@@ -1,0 +1,26 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: dish-agent-workorder
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        group: ${NACOS_GROUP:DISH_AGENT_GROUP}
+
+dubbo:
+  protocol:
+    name: dubbo
+    port: 20882
+  registry:
+    address: nacos://${NACOS_SERVER_ADDR:localhost:8848}
+  provider:
+    timeout: 30000
+
+backend:
+  mode: ${WORKORDER_BACKEND_MODE:mock}
+  base-url: ${WORKORDER_BACKEND_BASE_URL:http://localhost:8090}
+  timeout-ms: ${WORKORDER_BACKEND_TIMEOUT_MS:2000}

@@ -1,0 +1,39 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: dish-agent-dish
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        group: ${NACOS_GROUP:DISH_AGENT_GROUP}
+
+dubbo:
+  protocol:
+    name: dubbo
+    port: 20881
+  registry:
+    address: nacos://${NACOS_SERVER_ADDR:localhost:8848}
+  provider:
+    timeout: 60000
+
+llm:
+  api-key: ${MINIMAX_API_KEY:your_api_key_here}
+  base-url: ${MINIMAX_BASE_URL:https://api.minimax.chat/v1}
+  model: ${MINIMAX_MODEL:minimax-m2.7}
+  temperature: 0.3
+
+rag:
+  vector-store-type: ${VECTOR_STORE_TYPE:inmemory}
+  milvus:
+    host: ${MILVUS_HOST:localhost}
+    port: ${MILVUS_PORT:19530}
+    collection: ${MILVUS_COLLECTION:dish_knowledge}
+  embedding:
+    model: ${EMBEDDING_MODEL:text-embedding-3-small}
+    dimension: ${EMBEDDING_DIMENSION:1536}
+  cohere:
+    api-key: ${COHERE_API_KEY:your_cohere_api_key_here}

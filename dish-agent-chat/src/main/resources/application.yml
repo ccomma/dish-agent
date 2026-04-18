@@ -1,0 +1,27 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: dish-agent-chat
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        group: ${NACOS_GROUP:DISH_AGENT_GROUP}
+
+dubbo:
+  protocol:
+    name: dubbo
+    port: 20883
+  registry:
+    address: nacos://${NACOS_SERVER_ADDR:localhost:8848}
+  provider:
+    timeout: 30000
+
+llm:
+  api-key: ${MINIMAX_API_KEY:your_api_key_here}
+  base-url: ${MINIMAX_BASE_URL:https://api.minimax.chat/v1}
+  model: ${MINIMAX_MODEL:minimax-m2.7}
+  temperature: 0.7

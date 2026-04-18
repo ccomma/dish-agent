@@ -1,27 +1,74 @@
 # 餐饮智能助手 (dish-agent)
 
-基于 LangChain4j 1.x 的多 Agent 协同架构实现，用于餐饮 SaaS 场景的智能客服系统。
+基于 **LangChain4j 1.x** 的微服务架构实现，用于餐饮 SaaS 场景的智能客服系统。
 
-**重要**：每次对项目进行修改后，请检查是否需要同步更新本文件（和 CLAUDE.md），以确保文档与代码保持一致。
+**v2.0 新增**：Spring Cloud Alibaba + Dubbo 微服务架构，每个 Agent 可独立部署。
 
 ## 项目概述
 
-本项目展示了如何使用 LangChain4j 框架构建企业级 AI 应用，包括：
+本项目展示了如何使用 LangChain4j 框架构建企业级 AI 应用：
 
-- **多 Agent 协同架构**：前置路由 Agent、菜品知识 Agent、工单处理 Agent 的协作
-- **意图识别与动态路由**：基于 LLM 的前置意图分类与分发
+- **微服务架构**：Gateway + Agent Cluster 的分布式部署方案
+- **多 Agent 协同**：意图识别、动态路由、服务编排
+- **ReAct 多步推理**：每个 Agent 内部实现 Thought → Action → Observation 循环
 - **垂直领域 RAG**：餐饮知识库的检索增强生成
 - **Function Calling**：与业务系统的工具调用集成
+
+## 架构图
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Gateway Layer (8080)                     │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐ │
+│  │  意图识别    │ →  │   Dubbo RPC │ →  │    结果整合         │ │
+│  │(RoutingAgent)│    │  (路由分发)  │    │ (ResponseAggregator)│ │
+│  └─────────────┘    └─────────────┘    └─────────────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│                     Agent Cluster (Dubbo RPC)                  │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐ │
+│  │ dish-agent-dish  │  │dish-agent-work  │  │dish-agent-   │ │
+│  │   (20881)       │  │   order (20882)  │  │    chat      │ │
+│  │ + ReAct Loop    │  │ + ReAct Loop    │  │  (20883)     │ │
+│  │ + RAG Pipeline  │  │ + Tool Call     │  │              │ │
+│  └──────────────────┘  └──────────────────┘  └──────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│                          dish-common                            │
+│  ReAct Engine │ Tool Call Framework │ Context / Dubbo Interfaces │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## 项目结构
 
 ```
 dish-agent/
-├── pom.xml                   # Maven 父 POM
-├── settings-test.xml         # Maven 配置（指向 Maven Central）
-├── langchain4j-demo/        # 教学演示模块（11个独立示例）
-├── langchain4j-enterprise/  # 企业级多Agent架构
-└── README.md
+├── pom.xml                              # 父POM（Spring Cloud Alibaba + Dubbo）
+├── settings-test.xml                    # Maven 配置
+│
+├── dish-common/                         # 公共模块
+│   └── com.example.dish/
+│       ├── react/ReActEngine.java        # ReAct引擎接口
+│       ├── context/AgentContext.java    # 上下文传递
+│       └── rpc/                         # Dubbo服务接口
+│
+├── dish-gateway/                        # 网关服务 (8080)
+│   └── com.example.dish.gateway/
+│       ├── controller/ChatController.java
+│       └── service/DubboClientService.java
+│
+├── dish-agent-dish/                     # 菜品知识Agent (Dubbo 20881)
+│   └── com.example.dish/
+│       ├── rag/RAGPipeline.java         # RAG两阶段检索
+│       └── service/DishReActAgent.java  # ReAct多步推理
+│
+├── dish-agent-workorder/                # 工单处理Agent (Dubbo 20882)
+│   └── com.example.dish/
+│       ├── tools/                        # 业务工具
+│       └── service/WorkOrderReActAgent.java
+│
+├── dish-agent-chat/                      # 闲聊Agent (Dubbo 20883)
+│
+├── langchain4j-demo/                   # 教学演示模块（保留）
+└── langchain4j-enterprise/              # 单体版（保留）
 ```
 
 ## 快速开始
@@ -30,66 +77,79 @@ dish-agent/
 
 - Java 17+
 - Maven 3.6+
-- Minimax API 密钥（用于云端示例）
+- Docker（用于 Nacos）
+- Minimax API 密钥
 
-### 2. 配置 API 密钥
-
-编辑 `langchain4j-enterprise/src/main/resources/config.properties`：
-
-```properties
-MINIMAX_API_KEY=your_api_key_here
-MINIMAX_BASE_URL=https://api.minimax.chat/v1
-MINIMAX_MODEL=minimax-m2.7
-```
-
-### 3. 编译项目
+### 2. 编译微服务
 
 ```bash
+# 编译全部模块
 mvn clean compile -s settings-test.xml
+
+# 仅编译微服务
+mvn compile -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
 ```
 
-### 4. 运行多 Agent 架构
+### 3. 启动微服务
 
 ```bash
-# 启动交互式对话
-mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.Bootstrap" -s settings-test.xml
+# 1. 启动 Nacos（服务注册中心）
+docker run -d --name nacos -p 8848:8848 nacos/nacos-server
 
-# 运行单元测试
-mvn test -pl langchain4j-enterprise -s settings-test.xml
+# 2. 启动 Agent 服务
+java -jar dish-agent-dish/target/dish-agent-dish.jar
+java -jar dish-agent-workorder/target/dish-agent-workorder.jar
+java -jar dish-agent-chat/target/dish-agent-chat.jar
+
+# 3. 启动网关
+java -jar dish-gateway/target/dish-gateway.jar
 ```
+
+### 4. 调用测试
+
+```bash
+curl -X POST http://localhost:8080/api/chat/process \
+  -H "Content-Type: application/json" \
+  -H "X-Store-Id: STORE_001" \
+  -d '{"message": "宫保鸡丁是什么菜系？"}'
+
+# 健康检查
+curl http://localhost:8080/api/chat/health
+```
+
+## 生产化改造进展（2026-04）
+
+- 网关修复 `sessionId` 贯通：`ChatController -> RoutingAgent -> AgentContext` 全链路传递同一会话ID。
+- 新增多租户会话绑定：支持从请求头 `X-Store-Id` 绑定会话店铺，默认店铺 `STORE_001`。
+- 新增请求追踪：网关注入并透传 `X-Trace-Id`，日志中输出 `traceId` 便于排障。
+- 新增健康检查接口：`GET /api/chat/health`。
+- RAG 知识外置：菜品/政策知识从硬编码迁移到 `dish-agent-dish/src/main/resources/rag/knowledge/*.md`。
+- ReAct 引擎统一：`dish-agent-dish` 与 `dish-agent-workorder` 均基于 `AbstractReActEngine` 执行。
+- 新增主线模块测试：网关新增会话与路由上下文单元测试。
+- 工单后端适配层：`dish-agent-workorder` 新增 `WorkOrderBackendGateway`，支持 `backend.mode=mock|http` 切换。
+- 会话存储可切换：网关支持 `session.store.type=memory|redis`，生产可直接启用 Redis 会话共享。
 
 ## 功能演示
 
 ### 菜品咨询
 ```
 用户: 宫保鸡丁是什么菜？
-路由: dish-knowledge (RAG)
+路由: dish-agent-dish (RAG)
 回答: 宫保鸡丁是一道经典川菜，分类为川菜，辣度2级（微辣），价格38元...
 ```
 
 ### 库存查询
 ```
 用户: 门店还有宫保鸡丁吗？
-路由: work-order (InventoryTools)
+路由: dish-agent-workorder (InventoryTools)
 回答: 【库存查询结果】
       • 宫保鸡丁: 50份 (有货)
-```
-
-### 订单查询
-```
-用户: 查询订单12345的状态
-路由: work-order (OrderTools)
-回答: 【订单查询结果】
-      订单号: 12345
-      门店: STORE_001
-      商品: 宫保鸡丁 x1, 麻婆豆腐 x1
-      状态: 配送中
 ```
 
 ### 退款申请
 ```
 用户: 我要退款，订单号67890，因为菜凉了
-路由: work-order (RefundTools)
+路由: dish-agent-workorder (RefundTools)
 回答: 【退款工单创建成功】
       工单号: TK1234567890
       订单号: 67890
@@ -97,72 +157,110 @@ mvn test -pl langchain4j-enterprise -s settings-test.xml
       状态: 待处理
 ```
 
-## 多 Agent 架构
+## 微服务模块说明
 
-### 组件说明
+| 模块 | 端口 | 职责 | 主要技术 |
+|------|------|------|----------|
+| dish-gateway | 8080 (HTTP) | 意图路由、结果聚合 | Spring Boot, Dubbo Consumer |
+| dish-agent-dish | 20881 (Dubbo) | 菜品 RAG + ReAct | RAGPipeline, Milvus, Cohere |
+| dish-agent-workorder | 20882 (Dubbo) | 库存/订单/退款 + ReAct | InventoryTools, ReActEngine |
+| dish-agent-chat | 20883 (Dubbo) | 闲聊对话 | LLM Chat |
 
-| Agent | 职责 | 处理意图 |
-|-------|------|----------|
-| OrchestrationAgent | 协调入口，分发请求 | 系统唯一入口 |
-| RoutingAgent | 意图识别，参数抽取 | 所有输入先行路由 |
-| DishKnowledgeAgent | 菜品知识问答 | DISH_QUESTION, DISH_INGREDIENT, DISH_COOKING_METHOD, POLICY_QUESTION |
-| WorkOrderAgent | 业务操作处理 | QUERY_INVENTORY, QUERY_ORDER, CREATE_REFUND |
+## ReAct 多步推理
+
+每个 Agent 内部实现 ReAct 循环：
+
+```
+Thought: 分析用户问题
+    ↓
+Action: 决定下一步行动（如 RAG 检索、工具调用）
+    ↓
+Observation: 获取行动结果
+    ↓
+(循环直到得到最终答案)
+    ↓
+Final: 生成最终回答
+```
 
 ### 意图 → Agent 映射
 
 ```
-GREETING / GENERAL_CHAT     → ChatAgent（直接对话）
-DISH_QUESTION / DISH_INGREDIENT / DISH_COOKING_METHOD / POLICY_QUESTION → DishKnowledgeAgent
-QUERY_INVENTORY / QUERY_ORDER / CREATE_REFUND → WorkOrderAgent
+GREETING / GENERAL_CHAT     → dish-agent-chat
+DISH_QUESTION / DISH_INGREDIENT / DISH_COOKING_METHOD / POLICY_QUESTION → dish-agent-dish
+QUERY_INVENTORY / QUERY_ORDER / CREATE_REFUND → dish-agent-workorder
 ```
 
-### 上下文传递
+## 配置说明
 
-每个 Agent 处理后会返回 `AgentResponse`，包含：
-- `success`: 是否成功
-- `content`: 响应内容
-- `agentName`: 来源 Agent
-- `context`: 更新后的上下文（传递给下一步）
-- `followUpHints`: 后续操作提示
+### 网关配置 (dish-gateway/src/main/resources/application.yml)
 
-## 企业级模块 (langchain4j-enterprise)
-
-### 包结构
-
+```yaml
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+dubbo:
+  registry:
+    address: nacos://localhost:8848
+llm:
+  api-key: ${MINIMAX_API_KEY}
+  base-url: https://api.minimax.chat/v1
+  model: minimax-m2.7
+logging:
+  pattern:
+    console: "... traceId=%X{traceId} ..."
 ```
-com.enterprise.langchain4j/
-├── agent/                    # Agent 实现
-│   ├── OrchestrationAgent.java
-│   ├── RoutingAgent.java
-│   ├── DishKnowledgeAgent.java
-│   └── WorkOrderAgent.java
-├── context/                  # 上下文传递
-│   └── AgentContext.java
-├── contract/                 # 契约定义
-│   ├── AgentResponse.java
-│   └── RoutingDecision.java
-├── tool/                     # 业务工具
-│   ├── InventoryTools.java
-│   ├── OrderTools.java
-│   └── RefundTools.java
-├── classifier/               # 意图分类
-│   ├── IntentClassifier.java
-│   └── IntentType.java
-├── rag/                      # RAG管道（生产级向量检索）
-│   ├── RAGPipeline.java        # RAG管道（Milvus/InMemory + Cohere Reranking）
-│   └── EmbeddingService.java   # 向量嵌入服务
-├── Bootstrap.java            # 启动入口
-└── Config.java               # 配置加载
+
+### Agent 配置 (dish-agent-dish/src/main/resources/application.yml)
+
+```yaml
+dubbo:
+  protocol:
+    name: dubbo
+    port: 20881
+rag:
+  vector-store-type: inmemory  # inmemory | milvus
+  milvus:
+    host: localhost
+    port: 19530
+```
+
+### 工单后端适配配置 (dish-agent-workorder/src/main/resources/application.yml)
+
+```yaml
+backend:
+  mode: ${WORKORDER_BACKEND_MODE:mock} # mock | http
+  base-url: ${WORKORDER_BACKEND_BASE_URL:http://localhost:8090}
+  timeout-ms: ${WORKORDER_BACKEND_TIMEOUT_MS:2000}
+```
+
+当 `backend.mode=http` 时，默认按以下接口约定调用后端：
+
+- `GET /api/backend/inventory/all?storeId=...`
+- `GET /api/backend/inventory?storeId=...&dishName=...`
+- `GET /api/backend/stores`
+- `GET /api/backend/orders/{orderId}`
+- `POST /api/backend/refunds`
+- `GET /api/backend/refunds/{ticketId}`
+
+### 会话存储配置 (dish-gateway/src/main/resources/application.yml)
+
+```yaml
+session:
+  store:
+    type: ${SESSION_STORE_TYPE:memory} # memory | redis
+    ttl-hours: ${SESSION_STORE_TTL_HOURS:12}
+    default-store-id: ${SESSION_DEFAULT_STORE_ID:STORE_001}
 ```
 
 ## 依赖说明
 
-- **langchain4j** (1.12.2): LangChain4j 核心库
-- **langchain4j-open-ai**: OpenAI/Minimax 集成（Embedding + Chat）
-- **langchain4j-ollama**: Ollama 本地模型集成
-- **langchain4j-milvus** (1.0.0-beta5): Milvus 向量数据库
-- **langchain4j-cohere** (1.0.0-beta5): Cohere Reranking
-- **slf4j-simple**: 日志实现
+- **Spring Cloud Alibaba**: 2023.0.1.0
+- **Dubbo**: 3.2.4
+- **LangChain4j**: 1.12.2
+- **langchain4j-milvus**: 1.0.0-beta5
+- **langchain4j-cohere**: 1.0.0-beta5
 
 > 注意：使用 `settings-test.xml` 编译以指向 Maven Central
 
@@ -176,21 +274,10 @@ com.enterprise.langchain4j/
 用户问题 → Embedding → Milvus/InMemory (Top-5) → Cohere Reranking (Top-3) → LLM → 回答
 ```
 
-### 配置
+### 知识来源
 
-在 `config.properties` 中配置向量存储：
-
-```properties
-VECTOR_STORE_TYPE=inmemory  # inmemory | milvus
-MILVUS_HOST=localhost
-MILVUS_PORT=19530
-MILVUS_COLLECTION=dish_knowledge
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIMENSION=1536
-
-# Reranking（可选）
-COHERE_API_KEY=your_api_key
-```
+- 当前知识文档外置于 `dish-agent-dish/src/main/resources/rag/knowledge/`。
+- 新增知识建议通过新增 Markdown 文件完成，无需修改 `RAGPipeline` 代码。
 
 ### 启动 Milvus（Docker）
 
@@ -200,23 +287,27 @@ docker run -d --name milvus -p 19530:19530 milvusdb/milvus:latest
 
 ## 学习路径
 
-1. **langchain4j-demo 模块**：学习 LangChain4j 基础用法
+1. **微服务架构（v2.0）**：学习分布式 Agent 系统
+   - dish-gateway → 网关路由
+   - dish-agent-dish → RAG + ReAct
+   - dish-agent-workorder → 工具调用 + ReAct
+
+2. **langchain4j-demo**：学习 LangChain4j 基础用法
    - BasicChatExample → 对话基础
    - PromptTemplateExample → 提示词工程
    - DocumentRAGExample → RAG 实现
    - ToolCallingExample → 函数调用
-   - LocalModelExample → 本地模型
-   - StructuredOutputExample → 结构化输出
 
-2. **langchain4j-enterprise 模块**：学习企业级多 Agent 架构
+3. **langchain4j-enterprise**：学习单体版 Agent 架构（保留参考）
    - Bootstrap → 启动入口
-   - 单元测试 → 验证各组件
    - 各 Agent 源码 → 架构设计
 
 ## 参考资源
 
 - [LangChain4j 官方文档](https://docs.langchain4j.dev/)
 - [LangChain4j GitHub](https://github.com/langchain4j/langchain4j)
+- [Dubbo 官方文档](https://dubbo.apache.org/)
+- [Spring Cloud Alibaba](https://spring-cloud-alibaba-group.github.io/)
 - [Minimax API 文档](https://api.minimax.chat/)
 
 ## 许可证

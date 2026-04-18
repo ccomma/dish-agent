@@ -6,319 +6,251 @@
 
 ## 项目概述
 
-这是一个 **LangChain4j 1.x 教学项目**，包含两个模块：
+这是一个 **LangChain4j 1.x 微服务架构项目**，包含两类模块：
 
-### langchain4j-demo 模块（教学演示）
-展示 LangChain4j 1.x 核心 API 的完整示例，包括：
-- 基础对话 (BasicChatExample)
-- 提示模板 (PromptTemplateExample) - 使用 `PromptTemplate` API
-- 文档 RAG (DocumentRAGExample)
-- 工具调用 (ToolCallingExample)
-- 本地模型 (LocalModelExample)
-- 结构化输出 (StructuredOutputExample)
-- 记忆 (MemoryExample)
-- 链式调用 (ChainExample)
-- 流式输出 (StreamingExample)
-- 输出解析 (OutputParserExample)
-- 向量嵌入 (EmbeddingsExample) - 包括 InMemory/Milvus 向量存储和 Reranking 演示
+### 微服务模块（新架构 - v2.0）
 
-### langchain4j-enterprise 模块（企业级多Agent架构）
-基于**多Agent协同架构**的餐饮智能助手，包含：
-- **前置路由Agent** - 意图识别与动态路由
-- **菜品知识Agent** - RAG 检索增强生成
-- **工单处理Agent** - 业务操作（库存、订单、退款）
-- **编排Agent** - 协调层，作为系统唯一入口
+基于 **Spring Cloud Alibaba + Dubbo** 的工业级微服务架构：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Gateway Layer                            │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐ │
+│  │  意图识别    │ →  │   Dubbo RPC │ →  │    结果整合         │ │
+│  │(RoutingAgent)│    │  (路由分发)  │    │ (ResponseAggregator)│ │
+│  └─────────────┘    └─────────────┘    └─────────────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│                     Agent Cluster (独立部署)                     │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐ │
+│  │ dish-agent-dish  │  │dish-agent-work  │  │dish-agent-   │ │
+│  │ @DubboService   │  │   order         │  │    chat      │ │
+│  │ + ReAct Loop   │  │ @DubboService   │  │ @DubboService│ │
+│  │ + RAG Pipeline │  │ + ReAct Loop   │  │              │ │
+│  └──────────────────┘  └──────────────────┘  └──────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│                          dish-common                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐│
+│  │ ReAct Engine│  │ Tool Call   │  │ Context / Tracing /     ││
+│  │ (通用封装)  │  │ Framework   │  │ Dubbo Interfaces      ││
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| 模块 | 端口 | 职责 |
+|------|------|------|
+| dish-gateway | 8080 | HTTP 入口、意图路由、结果聚合 |
+| dish-agent-dish | 20881 (Dubbo) | 菜品知识 RAG + ReAct 多步推理 |
+| dish-agent-workorder | 20882 (Dubbo) | 库存/订单/退款 + ReAct 多步推理 |
+| dish-agent-chat | 20883 (Dubbo) | 闲聊对话 |
+| dish-common | - | 公共组件：ReActEngine、AgentContext、Dubbo 接口 |
+
+### 遗留模块（保留用于教学）
+
+| 模块 | 用途 |
+|------|------|
+| langchain4j-demo | LangChain4j 1.x 教学演示 |
+| langchain4j-enterprise | 单体版企业级多Agent（已迁移到微服务） |
 
 ## 常用命令
 
 ### 构建和编译
+
 ```bash
-# 编译项目
+# 编译全部模块
 mvn compile -s settings-test.xml
+
+# 仅编译微服务模块
+mvn compile -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
 
 # 清理并编译
 mvn clean compile -s settings-test.xml
 
-# 打包为 JAR
-mvn package -s settings-test.xml
+# 打包微服务 JAR
+mvn package -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
 ```
 
-### 运行企业级多Agent示例
-```bash
-# 启动多Agent协同架构
-mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.Bootstrap" -s settings-test.xml
+### 微服务启动顺序
 
-# 运行模块测试
-mvn exec:java -Dexec.mainClass="com.enterprise.langchain4j.MultiAgentTest" -s settings-test.xml
+```bash
+# 1. 启动 Nacos（服务注册与发现）
+docker run -d --name nacos -p 8848:8848 nacos/nacos-server
+
+# 2. 启动 Agent 服务（可并行）
+java -jar dish-agent-dish/target/dish-agent-dish.jar
+java -jar dish-agent-workorder/target/dish-agent-workorder.jar
+java -jar dish-agent-chat/target/dish-agent-chat.jar
+
+# 3. 启动网关
+java -jar dish-gateway/target/dish-gateway.jar
+```
+
+### 微服务测试
+
+```bash
+# 调用网关 API
+curl -X POST http://localhost:8080/api/chat/process \
+  -H "Content-Type: application/json" \
+  -d '{"message": "宫保鸡丁是什么菜系？"}'
+
+# 健康检查
+curl http://localhost:8080/api/chat/health
 ```
 
 ### 运行教学演示示例
+
 ```bash
-# 提示模板示例（展示 PromptTemplate API）
+# 提示模板示例
 mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.basics.PromptTemplateExample" -s settings-test.xml
 
 # 基础对话示例
 mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.basics.BasicChatExample" -s settings-test.xml
-
-# 记忆示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.memory.MemoryExample" -s settings-test.xml
-
-# RAG 示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.rag.DocumentRAGExample" -s settings-test.xml
-
-# 工具调用示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.tool.ToolCallingExample" -s settings-test.xml
-
-# 本地模型示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.model.LocalModelExample" -s settings-test.xml
-
-# 结构化输出示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.output.StructuredOutputExample" -s settings-test.xml
 ```
 
 ## 项目结构
 
 ```
 dish-agent/
-├── pom.xml                           # 父 POM
-├── settings-test.xml                  # Maven 配置（不使用镜像）
-├── langchain4j-demo/                 # 教学演示模块
-│   └── src/main/java/com/example/langchain4jdemo/
-│       ├── Config.java
-│       ├── TestMinimax.java
-│       ├── basics/
-│       │   ├── BasicChatExample.java       # 基础对话
-│       │   └── PromptTemplateExample.java  # 提示模板（PromptTemplate API）
-│       ├── memory/
-│       │   └── MemoryExample.java          # 记忆管理
-│       ├── tool/
-│       │   └── ToolCallingExample.java     # 工具调用
-│       ├── chain/
-│       │   └── ChainExample.java          # 链式调用
+├── pom.xml                              # 父POM（Spring Cloud Alibaba 2023.0.1.0 + Dubbo 3.2.4）
+├── settings-test.xml                     # Maven 配置
+│
+├── dish-common/                          # 公共模块
+│   └── src/main/java/com/example/dish/
+│       ├── agent/ReActState.java         # ReAct状态机
+│       ├── classifier/IntentType.java   # 意图枚举
+│       ├── context/AgentContext.java      # 上下文传递
+│       ├── contract/
+│       │   ├── AgentResponse.java        # 统一响应
+│       │   └── RoutingDecision.java      # 路由决策
+│       ├── react/
+│       │   ├── ReActEngine.java          # ReAct引擎接口
+│       │   └── AbstractReActEngine.java  # ReAct执行器抽象类
+│       └── rpc/
+│           ├── DishAgentService.java     # 菜品Agent Dubbo接口
+│           ├── WorkOrderAgentService.java # 工单Agent Dubbo接口
+│           └── ChatAgentService.java     # 闲聊Agent Dubbo接口
+│
+├── dish-gateway/                         # 网关服务（8080端口）
+│   └── src/main/java/com/example/dish/gateway/
+│       ├── GatewayApplication.java       # Spring Boot 启动类
+│       ├── controller/ChatController.java # HTTP 入口
+│       ├── service/
+│       │   ├── DubboClientService.java    # Dubbo 客户端调用
+│       │   └── ResponseAggregator.java    # 结果聚合
+│       └── agent/RoutingAgent.java        # 意图识别路由
+│
+├── dish-agent-dish/                      # 菜品知识Agent（Dubbo 20881）
+│   └── src/main/java/com/example/dish/
+│       ├── DishAgentApplication.java      # @EnableDubbo 启动类
 │       ├── rag/
-│       │   ├── DocumentRAGExample.java    # 文档 RAG
-│       │   └── EmbeddingsExample.java      # 向量嵌入
-│       ├── streaming/
-│       │   └── StreamingExample.java       # 流式输出
-│       ├── output/
-│       │   ├── StructuredOutputExample.java # 结构化输出
-│       │   └── OutputParserExample.java    # 输出解析
-│       └── model/
-│           └── LocalModelExample.java      # 本地模型（Ollama）
-├── langchain4j-enterprise/           # 企业级多Agent模块
-│   └── src/main/java/com/enterprise/langchain4j/
-│       ├── Bootstrap.java            # [启动入口]
-│       ├── Config.java
-│       ├── agent/                    # Agent 实现
-│       │   ├── OrchestrationAgent.java  # 编排协调层
-│       │   ├── RoutingAgent.java       # 前置路由Agent
-│       │   ├── DishKnowledgeAgent.java # 菜品知识Agent
-│       │   └── WorkOrderAgent.java     # 工单处理Agent
-│       ├── context/                  # 上下文传递
-│       │   └── AgentContext.java
-│       ├── contract/                 # 契约定义
-│       │   ├── AgentResponse.java
-│       │   └── RoutingDecision.java
-│       ├── tool/                     # 业务工具
+│       │   ├── RAGPipeline.java            # RAG两阶段检索管道
+│       │   └── EmbeddingService.java      # 向量化服务
+│       └── service/
+│           ├── DishAgentServiceImpl.java # @DubboService 实现
+│           └── DishReActAgent.java        # 内部ReAct多步推理
+│
+├── dish-agent-workorder/                 # 工单处理Agent（Dubbo 20882）
+│   └── src/main/java/com/example/dish/
+│       ├── WorkOrderAgentApplication.java
+│       ├── tools/                         # 业务工具
 │       │   ├── InventoryTools.java
 │       │   ├── OrderTools.java
 │       │   └── RefundTools.java
-│       ├── classifier/               # 意图分类
-│       │   ├── IntentClassifier.java
-│       │   └── IntentType.java
-│       └── rag/                     # RAG管道（生产级向量检索）
-│           ├── RAGPipeline.java        # RAG管道（Milvus/InMemory + Cohere Reranking）
-│           └── EmbeddingService.java   # 向量嵌入服务
-├── run_example.sh
-├── README.md
-└── CLAUDE.md
+│       └── service/
+│           ├── WorkOrderAgentServiceImpl.java
+│           └── WorkOrderReActAgent.java
+│
+├── dish-agent-chat/                      # 闲聊Agent（Dubbo 20883）
+│   └── src/main/java/com/example/dish/
+│       ├── ChatAgentApplication.java
+│       └── service/ChatAgentServiceImpl.java
+│
+├── langchain4j-demo/                     # 教学演示模块（保留）
+│   └── src/main/java/com/example/langchain4jdemo/
+│       ├── basics/
+│       │   ├── BasicChatExample.java
+│       │   └── PromptTemplateExample.java
+│       ├── memory/MemoryExample.java
+│       ├── tool/ToolCallingExample.java
+│       ├── rag/
+│       │   ├── DocumentRAGExample.java
+│       │   └── EmbeddingsExample.java
+│       └── ...
+│
+└── langchain4j-enterprise/               # 单体版（保留，迁移中）
 ```
 
-## 多Agent架构说明
+## 微服务架构说明
 
 ### 协作流程
+
 ```
-用户输入 → OrchestrationAgent → RoutingAgent (路由决策)
+用户请求 → Gateway:8080 → RoutingAgent (意图识别)
                                     ↓
                     ┌───────────────┼───────────────┐
                     ↓               ↓               ↓
-            DishKnowledge    WorkOrder        Chat
-              Agent           Agent          Agent
-                ↓               ↓
-            RAGPipeline   Inventory/Order/Refund Tools
+            dish-agent-dish  dish-agent-work  dish-agent-chat
+              (Dubbo)          (Dubbo)         (Dubbo)
+                  ↓               ↓
+              RAGPipeline   Inventory/Order/Refund
 ```
 
 ### 意图类型 (IntentType)
-- `GREETING` / `GENERAL_CHAT` → ChatAgent（直接对话）
-- `DISH_QUESTION` / `DISH_INGREDIENT` / `DISH_COOKING_METHOD` / `POLICY_QUESTION` → DishKnowledgeAgent（RAG）
-- `QUERY_INVENTORY` / `QUERY_ORDER` / `CREATE_REFUND` → WorkOrderAgent（业务工具）
+- `GREETING` / `GENERAL_CHAT` → dish-agent-chat（直接对话）
+- `DISH_QUESTION` / `DISH_INGREDIENT` / `DISH_COOKING_METHOD` / `POLICY_QUESTION` → dish-agent-dish（RAG）
+- `QUERY_INVENTORY` / `QUERY_ORDER` / `CREATE_REFUND` → dish-agent-workorder（业务工具）
 
 ### 核心组件
 
-1. **AgentContext** - 跨Agent状态传递载体
+1. **ReActEngine** - ReAct 多步推理引擎接口
+   - `AbstractReActEngine` 提供通用流程
+   - 子类实现：think(), decideAction(), executeAction()
+
+2. **AgentContext** - 跨 Agent 状态传递
    - 字段: sessionId, intent, storeId, orderId, dishName, refundReason, userInput
 
-2. **RoutingDecision** - 路由决策
-   - intent, targetAgent, reason, context
+3. **Dubbo 接口** - 服务间通信契约
+   - `DishAgentService`, `WorkOrderAgentService`, `ChatAgentService`
 
-3. **AgentResponse** - Agent统一响应
-   - success, content, agentName, context, followUpHints
+## 技术栈
 
-## LangChain4j 1.x 关键 API
-
-### 1. 模型配置
-```java
-// 使用 ChatModel 接口（替代旧的 ChatLanguageModel）
-ChatModel model = OpenAiChatModel.builder()
-    .apiKey(config.getApiKey())
-    .baseUrl(config.getBaseUrl())
-    .modelName(config.getModel())
-    .temperature(0.7)
-    .build();
-```
-
-### 2. AiServices 构建器模式
-```java
-// 使用 .chatModel() 方法（替代旧的 .chatLanguageModel()）
-Assistant assistant = AiServices.builder(Assistant.class)
-    .chatModel(model)           // 新 API
-    .chatMemory(memory)
-    .tools(tool1, tool2)
-    .build();
-```
-
-### 3. 消息构建
-```java
-// 使用静态工厂方法
-List<ChatMessage> messages = List.of(
-    SystemMessage.from("你是一个有帮助的助手"),
-    UserMessage.from("你好")
-);
-
-// 或使用 .systemMessage() / .userMessage()
-ChatResponse response = model.chat(messages);
-String text = response.aiMessage().text();
-```
-
-### 4. PromptTemplate API（1.x 新特性）
-```java
-// 使用 PromptTemplate 进行模板渲染
-PromptTemplate template = PromptTemplate.from(
-    "请将{{text}}翻译成{{targetLanguage}}"
-);
-
-Prompt filled = template.apply(Map.of(
-    "text", input,
-    "targetLanguage", "中文"
-));
-
-String promptText = filled.text();
-```
-
-### 5. @Tool 注解模式
-```java
-public class MyTools {
-    @Tool("查询库存")
-    public String queryInventory(@P("门店ID") String storeId) {
-        // implementation
-    }
-}
-```
-
-### 6. ChatMemory
-```java
-ChatMemory memory = MessageWindowChatMemory.withMaxMessages(20);
-```
-
-### 7. EmbeddingStore 和相似度搜索
-```java
-// 使用 OpenAI EmbeddingModel
-EmbeddingModel embeddingModel = OpenAiEmbeddingModel.builder()
-    .apiKey(apiKey)
-    .modelName("text-embedding-3-small")
-    .build();
-
-// 存入向量
-EmbeddingStore<TextSegment> store = new InMemoryEmbeddingStore<>();
-store.add(embeddingModel.embed("文本").content(), TextSegment.from("文本"));
-
-// 相似度搜索
-EmbeddingSearchResult<TextSegment> result = store.search(
-    EmbeddingSearchRequest.builder()
-        .queryEmbedding(embeddingModel.embed("查询").content())
-        .maxResults(3)
-        .build()
-);
-
-// 遍历结果
-for (EmbeddingMatch<TextSegment> match : result.matches()) {
-    System.out.println("[" + match.score() + "] " + match.embedded().text());
-}
-```
-
-### 8. RAG with Reranking
-```java
-// 初步检索
-EmbeddingSearchResult<TextSegment> initial = store.search(
-    EmbeddingSearchRequest.builder()
-        .queryEmbedding(queryEmbedding)
-        .maxResults(5)
-        .build()
-);
-
-// Reranking 使用 Cohere ScoringModel
-ScoringModel scoringModel = CohereScoringModel.builder()
-    .apiKey(cohereApiKey)
-    .build();
-
-List<TextSegment> segments = initial.matches().stream()
-    .map(EmbeddingMatch::embedded)
-    .toList();
-
-Response<List<Double>> scores = scoringModel.scoreAll(segments, queryText);
-// 按分数排序后取 top-k
-```
+| 组件 | 版本 |
+|------|------|
+| Spring Cloud Alibaba | 2023.0.1.0 |
+| Dubbo | 3.2.4 |
+| Nacos | 服务注册与发现 |
+| LangChain4j | 1.12.2 |
+| Java | 17+ |
 
 ## 依赖管理
 
-- **LangChain4j 版本**: `1.12.2`（在 pom.xml 中定义）
-- **Java 版本**: 17+
-- **核心依赖**:
-  - `langchain4j` (核心)
-  - `langchain4j-open-ai` (OpenAI/Minimax 兼容)
-  - `langchain4j-ollama` (本地模型)
-  - `langchain4j-milvus` (Milvus 向量数据库)
-  - `langchain4j-cohere` (Cohere Reranking)
+在根 `pom.xml` 中统一管理：
+
+- **Spring Boot**: 3.2.0
+- **Spring Cloud**: 2023.0.0
+- **Spring Cloud Alibaba**: 2023.0.1.0
+- **Dubbo**: 3.2.4
+- **LangChain4j**: 1.12.2
+- **langchain4j-milvus**: 1.0.0-beta5
+- **langchain4j-cohere**: 1.0.0-beta5
 
 ## 环境要求
 
 - **Java 17+** 必需
-- **Minimax API 密钥** 用于云端示例（在 `config.properties` 中配置）
-- **Ollama** 用于本地模型示例（可选）
+- **Docker** 用于 Nacos
+- **Minimax API 密钥** 在 `application.yml` 中配置
+- **Milvus**（可选，用于生产环境向量存储）
 
 ## 故障排除
 
-1. **缺少 Minimax API 密钥** - 在 config.properties 中设置 MINIMAX_API_KEY
-2. **Ollama 服务未运行** - 使用 `ollama serve` 启动并拉取所需模型
-3. **编译错误** - 确保使用 Java 17+，运行 `mvn clean compile -s settings-test.xml`
-4. **Maven 仓库连接问题** - 使用 `settings-test.xml` 配置指向 Maven Central
-
-## 环境健康检查
-在开始任何工作之前，运行完整的环境检查。可使用 `env-health-check` skill 启动自动化检查。
-
-检查内容包括：Maven 仓库连接、凭证配置、依赖完整性、编译验证、API 版本兼容性。如发现问题会自动尝试修复或创建 Agent 处理。
+1. **Nacos 连接失败** - 确保 Nacos 已启动：`docker ps | grep nacos`
+2. **Dubbo 服务不可达** - 检查服务是否注册到 Nacos
+3. **编译错误** - 确保使用 Java 17+：`java -version`
+4. **RAG 无结果** - 检查 Milvus 是否运行（生产环境）
 
 ## 约束
+
 在建议任何命令之前，请先验证该命令是否存在于当前的 Claude Code 版本中。切勿在未确认已实现的情况下建议 /sessions、/history 或其他命令。
 
 ## API 探索
+
 当使用不熟悉的库 API 时，可使用 Agent 工具来探索代码库，找到正确的方法签名后再进行实现。可使用 `api-explore` skill 来启动探索。
-
-## 并行 Agent 开发模式
-对于复杂功能，使用并行 Agent 模式同时开发。可使用 `parallel-dev` skill 来启动此模式。
-
-1. **impl**：负责编写核心业务逻辑
-2. **tests**：负责编写全面的测试套件
-3. **docs**：负责创建 README 和 API 文档
-
-此模式适用于所有模块（langchain4j-demo、langchain4j-enterprise）及未来新建模块。每个 Agent 独立工作，完成后合并并运行最终集成测试。
