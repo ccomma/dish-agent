@@ -233,6 +233,8 @@ backend:
   mode: ${WORKORDER_BACKEND_MODE:mock} # mock | http
   base-url: ${WORKORDER_BACKEND_BASE_URL:http://localhost:8090}
   timeout-ms: ${WORKORDER_BACKEND_TIMEOUT_MS:2000}
+  connect-timeout-ms: ${WORKORDER_BACKEND_CONNECT_TIMEOUT_MS:${WORKORDER_BACKEND_TIMEOUT_MS:2000}}
+  read-timeout-ms: ${WORKORDER_BACKEND_READ_TIMEOUT_MS:${WORKORDER_BACKEND_TIMEOUT_MS:2000}}
 ```
 
 当 `backend.mode=http` 时，默认按以下接口约定调用后端：
@@ -243,6 +245,8 @@ backend:
 - `GET /api/backend/orders/{orderId}`
 - `POST /api/backend/refunds`
 - `GET /api/backend/refunds/{ticketId}`
+
+OpenAPI 草案见：[workorder-backend.yaml](/Users/ccomma/Desktop/dish-agent/docs/openapi/workorder-backend.yaml)。
 
 ### 会话存储配置 (dish-gateway/src/main/resources/application.yml)
 

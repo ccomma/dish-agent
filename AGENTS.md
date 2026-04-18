@@ -270,6 +270,8 @@ dish-agent/
 - 工单工具层必须通过 `WorkOrderBackendGateway` 访问数据源，禁止在 `InventoryTools/OrderTools/RefundTools` 内直接写数据。
 - 默认使用 `backend.mode=mock`；联调或生产环境使用 `backend.mode=http` 并配置 `backend.base-url`。
 - `backend.mode=http` 默认依赖 `/api/backend/*` 路径族（库存、订单、退款），联调方需遵循该契约或同步调整适配器实现。
+- 建议显式配置 `backend.connect-timeout-ms` 与 `backend.read-timeout-ms`，避免联调环境下默认超时不一致。
+- 后端联调契约草案维护在 `docs/openapi/workorder-backend.yaml`，接口变更需同步更新该文件与适配器校验逻辑。
 
 6. **会话存储约束**
 - 网关会话存储通过 `session.store.type` 切换：`memory`（默认）或 `redis`（生产推荐）。

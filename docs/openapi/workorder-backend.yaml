@@ -1,0 +1,244 @@
+openapi: 3.0.3
+info:
+  title: Dish Agent WorkOrder Backend API Draft
+  version: 0.1.0
+  description: >
+    dish-agent-workorder 在 `backend.mode=http` 下依赖的后端接口契约草案。
+    该文档用于联调，不包含鉴权细节（建议通过网关或服务网格统一处理）。
+servers:
+  - url: http://localhost:8090
+    description: Local backend
+
+paths:
+  /api/backend/inventory/all:
+    get:
+      summary: 查询门店全部库存
+      operationId: queryAllInventory
+      parameters:
+        - name: storeId
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: 查询结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryResponse"
+
+  /api/backend/inventory:
+    get:
+      summary: 查询门店单个菜品库存
+      operationId: queryInventory
+      parameters:
+        - name: storeId
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: dishName
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 查询结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryResponse"
+
+  /api/backend/stores:
+    get:
+      summary: 查询门店列表
+      operationId: listStores
+      responses:
+        "200":
+          description: 门店列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreListResponse"
+
+  /api/backend/orders/{orderId}:
+    get:
+      summary: 查询订单状态
+      operationId: queryOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: 订单结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+
+  /api/backend/refunds:
+    post:
+      summary: 创建退款工单
+      operationId: createRefund
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundCreateRequest"
+      responses:
+        "200":
+          description: 退款创建结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefundResponse"
+
+  /api/backend/refunds/{ticketId}:
+    get:
+      summary: 查询退款工单状态
+      operationId: queryRefund
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: 退款结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefundResponse"
+
+components:
+  schemas:
+    InventoryResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        errorMessage:
+          type: string
+          nullable: true
+        storeId:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryItem"
+      description: success=true 时建议返回 storeId 与 items；success=false 时返回 errorMessage。
+
+    InventoryItem:
+      type: object
+      required: [dishName, quantity]
+      properties:
+        dishName:
+          type: string
+          minLength: 1
+        quantity:
+          type: integer
+          minimum: 0
+
+    StoreListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 可选；不传等价于 true。
+        errorMessage:
+          type: string
+          nullable: true
+        stores:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoreInfo"
+
+    StoreInfo:
+      type: object
+      required: [storeId, name]
+      properties:
+        storeId:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        address:
+          type: string
+          nullable: true
+
+    OrderResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        errorMessage:
+          type: string
+          nullable: true
+        orderId:
+          type: string
+          nullable: true
+        storeId:
+          type: string
+          nullable: true
+        items:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        createTime:
+          type: string
+          format: date-time
+          nullable: true
+
+    RefundCreateRequest:
+      type: object
+      required: [orderId, reason]
+      properties:
+        orderId:
+          type: string
+          minLength: 1
+        reason:
+          type: string
+          minLength: 1
+
+    RefundResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        errorMessage:
+          type: string
+          nullable: true
+        ticketId:
+          type: string
+          nullable: true
+        orderId:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        createTime:
+          type: string
+          format: date-time
+          nullable: true
