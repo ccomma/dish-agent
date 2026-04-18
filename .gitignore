@@ -84,6 +84,11 @@ out/
 # Claude Code
 .claude/
 
+.agents/
+
+# Local git worktrees
+.worktrees/
+
 # NetBeans
 /nbproject/private/
 /build/
