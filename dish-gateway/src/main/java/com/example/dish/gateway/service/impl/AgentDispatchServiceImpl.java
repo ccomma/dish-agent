@@ -5,6 +5,7 @@ import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.common.rpc.ChatAgentService;
 import com.example.dish.common.rpc.DishAgentService;
 import com.example.dish.common.rpc.WorkOrderAgentService;
+import com.example.dish.gateway.config.DubboTraceContextSupport;
 import com.example.dish.gateway.service.AgentDispatchService;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,8 @@ public class AgentDispatchServiceImpl implements AgentDispatchService {
         if (routing == null) {
             throw new IllegalArgumentException("路由决策不能为空");
         }
+
+        DubboTraceContextSupport.attachCurrentTraceId();
 
         String targetAgent = routing.targetAgent();
         AgentResponse response;
