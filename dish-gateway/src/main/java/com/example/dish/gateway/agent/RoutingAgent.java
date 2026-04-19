@@ -61,11 +61,22 @@ public class RoutingAgent {
         // 2. 获取店铺ID（从 Session，多租户隔离）
         String resolvedSessionId = resolveSessionId(sessionId, existingContext);
         String storeId = sessionService.resolveStoreId(resolvedSessionId, requestStoreId);
-        log.info("routing request: sessionId={}, intent={}, storeId={}",
-                resolvedSessionId, extracted.intent(), storeId);
 
         // 3. 构建上下文（合并 LLM 抽取的参数 + Session 中的店铺ID）
         AgentContext context = buildContext(userInput, extracted, resolvedSessionId, storeId, existingContext);
+
+        if (extracted.extractionFailed()) {
+            log.warn("routing extraction failed: sessionId={}, storeId={}", resolvedSessionId, storeId);
+            return new RoutingDecision(
+                    IntentType.UNKNOWN,
+                    RoutingDecision.TARGET_CHAT,
+                    "意图抽取失败，走安全兜底路径",
+                    context
+            );
+        }
+
+        log.info("routing request: sessionId={}, intent={}, storeId={}",
+                resolvedSessionId, extracted.intent(), storeId);
 
         // 4. 确定目标Agent
         String targetAgent = INTENT_TO_AGENT.getOrDefault(extracted.intent(), RoutingDecision.TARGET_CHAT);

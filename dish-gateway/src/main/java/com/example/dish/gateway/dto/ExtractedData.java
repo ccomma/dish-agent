@@ -9,5 +9,6 @@ public record ExtractedData(
         IntentType intent,
         String dishName,
         String orderId,
-        String refundReason
+        String refundReason,
+        boolean extractionFailed
 ) {}
