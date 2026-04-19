@@ -34,11 +34,12 @@ public class IntentAndParameterExtractorImpl implements IntentAndParameterExtrac
                 result.intent(),
                 result.dishName(),
                 result.orderId(),
-                result.refundReason()
+                result.refundReason(),
+                false
             );
         } catch (Exception e) {
             System.err.println("意图识别和参数抽取失败: " + e.getMessage());
-            return new ExtractedData(IntentType.GENERAL_CHAT, null, null, null);
+            return new ExtractedData(IntentType.UNKNOWN, null, null, null, true);
         }
     }
 

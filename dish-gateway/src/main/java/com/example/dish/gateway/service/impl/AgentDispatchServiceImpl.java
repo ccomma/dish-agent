@@ -8,7 +8,11 @@ import com.example.dish.common.rpc.WorkOrderAgentService;
 import com.example.dish.gateway.config.DubboTraceContextSupport;
 import com.example.dish.gateway.service.AgentDispatchService;
 import org.apache.dubbo.config.annotation.DubboReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /**
  * Agent 分发服务
@@ -16,6 +20,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AgentDispatchServiceImpl implements AgentDispatchService {
+
+    private static final Logger log = LoggerFactory.getLogger(AgentDispatchServiceImpl.class);
 
     @DubboReference(timeout = 60000, retries = 0)
     private DishAgentService dishAgentService;
@@ -38,17 +44,48 @@ public class AgentDispatchServiceImpl implements AgentDispatchService {
         DubboTraceContextSupport.attachCurrentTraceId();
 
         String targetAgent = routing.targetAgent();
-        AgentResponse response;
+        String sessionId = routing.context() != null ? routing.context().getSessionId() : null;
 
-        switch (targetAgent) {
-            case RoutingDecision.TARGET_DISH_KNOWLEDGE ->
-                    response = dishAgentService.answerWithReflection(routing.context().getUserInput(), routing.context());
-            case RoutingDecision.TARGET_WORK_ORDER -> response = workOrderAgentService.process(routing.context());
-            case RoutingDecision.TARGET_CHAT ->
-                    response = chatAgentService.chat(routing.context().getUserInput(), routing.context().getSessionId());
-            default -> response = AgentResponse.failure("未知目标Agent: " + targetAgent, "Gateway", routing.context());
+        try {
+            return switch (targetAgent) {
+                case RoutingDecision.TARGET_DISH_KNOWLEDGE ->
+                        dishAgentService.answerWithReflection(routing.context().getUserInput(), routing.context());
+                case RoutingDecision.TARGET_WORK_ORDER -> workOrderAgentService.process(routing.context());
+                case RoutingDecision.TARGET_CHAT ->
+                        chatAgentService.chat(routing.context().getUserInput(), routing.context().getSessionId());
+                default -> AgentResponse.failure("未知目标Agent: " + targetAgent, "Gateway", routing.context());
+            };
+        } catch (Exception ex) {
+            log.error("agent dispatch failed: sessionId={}, targetAgent={}, message={}",
+                    sessionId, targetAgent, ex.getMessage(), ex);
+            return buildDegradedResponse(targetAgent, routing);
         }
+    }
 
-        return response;
+    private AgentResponse buildDegradedResponse(String targetAgent, RoutingDecision routing) {
+        return switch (targetAgent) {
+            case RoutingDecision.TARGET_DISH_KNOWLEDGE -> AgentResponse.builder()
+                    .success(false)
+                    .content("菜品服务暂时不可用，请稍后重试或换个问法")
+                    .agentName("Gateway")
+                    .context(routing.context())
+                    .followUpHints(List.of("换个表述再问一次", "稍后再试", "改问其他菜品问题"))
+                    .build();
+            case RoutingDecision.TARGET_WORK_ORDER -> AgentResponse.builder()
+                    .success(false)
+                    .content("工单服务暂时不可用，请稍后重试或联系人工客服")
+                    .agentName("Gateway")
+                    .context(routing.context())
+                    .followUpHints(List.of("稍后重试", "联系人工客服", "检查订单号后重试"))
+                    .build();
+            case RoutingDecision.TARGET_CHAT -> AgentResponse.builder()
+                    .success(false)
+                    .content("聊天服务暂时不可用，请稍后重试")
+                    .agentName("Gateway")
+                    .context(routing.context())
+                    .followUpHints(List.of("稍后再试", "切换为业务查询", "重新发起会话"))
+                    .build();
+            default -> AgentResponse.failure("未知目标Agent: " + targetAgent, "Gateway", routing.context());
+        };
     }
 }
