@@ -31,6 +31,9 @@ public class RedisSessionServiceImpl implements SessionService {
     @Value("${session.store.ttl-hours:12}")
     private long ttlHours;
 
+    @Value("${session.store.conflict-strategy:keep_existing}")
+    private String conflictStrategy;
+
     @Override
     public String resolveStoreId(String sessionId, String requestStoreId) {
         String incomingStoreId = normalizeStoreId(requestStoreId);
@@ -43,9 +46,14 @@ public class RedisSessionServiceImpl implements SessionService {
             String existingStoreId = redisTemplate.opsForHash().get(redisKey, STORE_ID_FIELD) instanceof String value
                     ? value : null;
             if (existingStoreId != null && incomingStoreId != null && !existingStoreId.equals(incomingStoreId)) {
-                log.warn("redis session store mismatch: sessionId={}, existing={}, incoming={}, keep existing",
-                        sessionId, existingStoreId, incomingStoreId);
-                incomingStoreId = existingStoreId;
+                if (isPreferRequestStrategy()) {
+                    log.info("redis session store mismatch: sessionId={}, existing={}, incoming={}, apply prefer_request",
+                            sessionId, existingStoreId, incomingStoreId);
+                } else {
+                    log.warn("redis session store mismatch: sessionId={}, existing={}, incoming={}, keep existing",
+                            sessionId, existingStoreId, incomingStoreId);
+                    incomingStoreId = existingStoreId;
+                }
             } else if (incomingStoreId == null) {
                 incomingStoreId = existingStoreId;
             }
@@ -68,5 +76,9 @@ public class RedisSessionServiceImpl implements SessionService {
         }
         String trimmed = storeId.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean isPreferRequestStrategy() {
+        return "prefer_request".equalsIgnoreCase(conflictStrategy);
     }
 }

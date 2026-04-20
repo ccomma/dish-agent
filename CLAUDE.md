@@ -134,8 +134,8 @@ dish-agent/
 │       ├── GatewayApplication.java       # Spring Boot 启动类
 │       ├── controller/ChatController.java # HTTP 入口
 │       ├── service/
-│       │   ├── DubboClientService.java    # Dubbo 客户端调用
-│       │   └── ResponseAggregator.java    # 结果聚合
+│       │   ├── impl/AgentDispatchServiceImpl.java # Dubbo 客户端调用
+│       │   └── impl/ResponseAggregatorImpl.java   # 结果聚合
 │       └── agent/RoutingAgent.java        # 意图识别路由
 │
 ├── dish-agent-dish/                      # 菜品知识Agent（Dubbo 20881）
