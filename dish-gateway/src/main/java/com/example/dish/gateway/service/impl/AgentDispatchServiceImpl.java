@@ -1,5 +1,6 @@
 package com.example.dish.gateway.service.impl;
 
+import com.example.dish.common.contract.AgentExecutionStep;
 import com.example.dish.common.contract.AgentResponse;
 import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.common.rpc.ChatAgentService;
@@ -12,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -40,10 +42,28 @@ public class AgentDispatchServiceImpl implements AgentDispatchService {
         if (routing == null) {
             throw new IllegalArgumentException("路由决策不能为空");
         }
+        return dispatchToTarget(routing, routing.targetAgent());
+    }
 
+    @Override
+    public List<AgentResponse> dispatchAll(RoutingDecision routing, List<AgentExecutionStep> steps) {
+        if (routing == null) {
+            throw new IllegalArgumentException("路由决策不能为空");
+        }
+        if (steps == null || steps.isEmpty()) {
+            return List.of(dispatch(routing));
+        }
+
+        List<AgentResponse> responses = new ArrayList<>();
+        for (AgentExecutionStep step : steps) {
+            responses.add(dispatchToTarget(routing, step.targetAgent()));
+        }
+        return responses;
+    }
+
+    private AgentResponse dispatchToTarget(RoutingDecision routing, String targetAgent) {
         DubboTraceContextSupport.attachCurrentTraceId();
 
-        String targetAgent = routing.targetAgent();
         String sessionId = routing.context() != null ? routing.context().getSessionId() : null;
 
         try {

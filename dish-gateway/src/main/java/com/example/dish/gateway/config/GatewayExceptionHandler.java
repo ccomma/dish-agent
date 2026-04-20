@@ -1,4 +1,4 @@
-package com.example.dish.gateway.controller;
+package com.example.dish.gateway.config;
 
 import com.example.dish.gateway.dto.GatewayResponse;
 import org.slf4j.Logger;

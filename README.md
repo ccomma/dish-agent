@@ -3,6 +3,7 @@
 基于 **LangChain4j 1.x** 的微服务架构实现，用于餐饮 SaaS 场景的智能客服系统。
 
 **v2.0 新增**：Spring Cloud Alibaba + Dubbo 微服务架构，每个 Agent 可独立部署。
+**v2.1 新增**：Control Plane 微服务群，支持 Planner / Policy / Memory 三层控制平面、独立 `dish-control-api` 契约模块、编排预览、审批闭环、可视化 Dashboard，以及 `Redis + 向量检索` 的长期记忆双层架构。
 
 ## 项目概述
 
@@ -18,11 +19,18 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Gateway Layer (8080)                     │
+│                         Gateway Layer (8080)                    │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐ │
-│  │  意图识别    │ →  │   Dubbo RPC │ →  │    结果整合         │ │
-│  │(RoutingAgent)│    │  (路由分发)  │    │ (ResponseAggregator)│ │
+│  │  意图识别    │ →  │ Control API │ →  │    结果整合         │ │
+│  │(RoutingAgent)│    │ + Dubbo RPC │    │ (ResponseAggregator)│ │
 │  └─────────────┘    └─────────────┘    └─────────────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│                    Control Plane (Dubbo RPC)                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
+│  │ dish-planner │  │ dish-policy  │  │     dish-memory      │ │
+│  │   (20884)    │  │   (20885)    │  │       (20886)        │ │
+│  │ DAG 规划      │  │ 风险判定/审批 │  │ 会话记忆/审批时间线   │ │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────┤
 │                     Agent Cluster (Dubbo RPC)                  │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐ │
@@ -50,11 +58,23 @@ dish-agent/
 │       ├── context/AgentContext.java    # 上下文传递
 │       └── rpc/                         # Dubbo服务接口
 │
+├── dish-control-api/                    # Control Plane 独立契约模块
+│   └── com.example.dish.control/
+│       ├── planner/                     # PlanningRequest / PlanningResult / ExecutionPlannerService
+│       ├── policy/                      # PolicyEvaluationRequest / PolicyEvaluationResult / PolicyDecisionService
+│       ├── memory/                      # MemoryRead/Write/Timeline 契约
+│       └── approval/                    # 审批票据创建/查询/决策契约
+│
 ├── dish-gateway/                        # 网关服务 (8080)
 │   └── com.example.dish.gateway/
 │       ├── controller/ChatController.java
+│       ├── controller/ControlPlaneController.java
 │       ├── agent/RoutingAgent.java
 │       └── service/impl/AgentDispatchServiceImpl.java
+│
+├── dish-planner/                        # 编排规划服务 (Dubbo 20884)
+├── dish-policy/                         # 策略/审批服务 (Dubbo 20885)
+├── dish-memory/                         # 会话记忆与审批时间线 (Dubbo 20886)
 │
 ├── dish-agent-dish/                     # 菜品知识Agent (Dubbo 20881)
 │   └── com.example.dish/
@@ -88,7 +108,7 @@ dish-agent/
 mvn clean compile -s settings-test.xml
 
 # 仅编译微服务
-mvn compile -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
+mvn compile -pl dish-common,dish-control-api,dish-memory,dish-planner,dish-policy,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
 ```
 
 ### 3. 启动微服务
@@ -97,12 +117,17 @@ mvn compile -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,di
 # 1. 启动 Nacos（服务注册中心）
 docker run -d --name nacos -p 8848:8848 nacos/nacos-server
 
-# 2. 启动 Agent 服务
+# 2. 启动 Control Plane 服务
+java -jar dish-planner/target/dish-planner.jar
+java -jar dish-policy/target/dish-policy.jar
+java -jar dish-memory/target/dish-memory.jar
+
+# 3. 启动 Agent 服务
 java -jar dish-agent-dish/target/dish-agent-dish.jar
 java -jar dish-agent-workorder/target/dish-agent-workorder.jar
 java -jar dish-agent-chat/target/dish-agent-chat.jar
 
-# 3. 启动网关
+# 4. 启动网关
 java -jar dish-gateway/target/dish-gateway.jar
 ```
 
@@ -116,6 +141,29 @@ curl -X POST http://localhost:8080/api/chat/process \
 
 # 健康检查
 curl http://localhost:8080/api/chat/health
+
+# 编排预览（不真正执行 agent）
+curl -X POST http://localhost:8080/api/control/plan-preview \
+  -H "Content-Type: application/json" \
+  -H "X-Store-Id: STORE_001" \
+  -d '{"message": "帮我查一下订单123并总结处理建议", "sessionId": "SESSION_DEMO"}'
+
+# 查询会话记忆时间线
+curl "http://localhost:8080/api/control/sessions/SESSION_DEMO/memory?limit=10" \
+  -H "X-Store-Id: STORE_001"
+
+# 审批通过
+curl -X POST http://localhost:8080/api/control/sessions/SESSION_DEMO/approvals/APR-12345678/approve \
+  -H "Content-Type: application/json" \
+  -H "X-Store-Id: STORE_001" \
+  -d '{"decidedBy":"ops-user","decisionReason":"订单异常已核实"}'
+
+# 控制面 Dashboard
+curl "http://localhost:8080/api/control/dashboard/overview?limit=10" \
+  -H "X-Store-Id: STORE_001"
+
+# 打开可视化控制台
+open http://localhost:8080/control/dashboard
 ```
 
 ## 生产化改造进展（2026-04）
@@ -134,6 +182,19 @@ curl http://localhost:8080/api/chat/health
 - Agent 分发降级：Dubbo 调用失败时按 Agent 返回差异化降级文案与 follow-up hints。
 - 网关统一异常响应：通过全局异常处理返回结构化错误，避免 raw 500。
 - traceId 跨 Dubbo 透传：网关写入 RPC attachment，Provider 恢复到 MDC，便于跨服务排障。
+- Control Plane 微服务化：新增 `dish-planner`、`dish-policy`、`dish-memory` 三个独立 Dubbo 服务。
+- 编排预览接口：`POST /api/control/plan-preview` 可输出执行步骤、策略决策、审批要求与记忆命中。
+- 审批票据查询接口：`GET /api/control/sessions/{sessionId}/approvals/{approvalId}`。
+- 审批闭环接口：`POST /api/control/sessions/{sessionId}/approvals/{approvalId}/approve|reject`。
+- 会话记忆时间线接口：`GET /api/control/sessions/{sessionId}/memory`。
+- 控制面 Dashboard 接口：`GET /api/control/dashboard/overview`。
+- 控制面页面入口：`GET /control/dashboard`，提供审批队列、活跃会话、时间线检查器和编排预览工作台。
+- 独立契约层：新增 `dish-control-api`，网关不再直接依赖 planner/policy/memory 实现模块。
+- 结构化审批票据：审批记录以稳定可解析格式写入记忆服务，避免运行期 JSON 依赖冲突。
+- 结构化记忆时间线：记忆服务支持按 `memoryType`、关键字、元数据过滤，便于控制面排查。
+- 跨会话控制台聚合：记忆时间线支持按租户维度聚合，多会话 Dashboard 可直接从控制面查询。
+- Redis 持久化记忆层：`dish-memory` 支持 `memory.mode=redis`，会话时间线、审批票据和控制面聚合可持久化到 Redis。
+- 长期记忆混合检索：`dish-memory` 的 `MemoryReadService` 现在使用 `keyword + vector similarity + recency` 混合召回，支持非完全匹配的语义记忆检索。
 
 ## 功能演示
 
@@ -168,6 +229,10 @@ curl http://localhost:8080/api/chat/health
 | 模块 | 端口 | 职责 | 主要技术 |
 |------|------|------|----------|
 | dish-gateway | 8080 (HTTP) | 意图路由、结果聚合 | Spring Boot, Dubbo Consumer |
+| dish-control-api | - | Control Plane RPC 契约层 | Java Records, Dubbo Contracts |
+| dish-planner | 20884 (Dubbo) | DAG 执行规划、执行模式选择 | Planner Graph, Dubbo |
+| dish-policy | 20885 (Dubbo) | 风险判定、审批门禁 | Rule Engine, Dubbo |
+| dish-memory | 20886 (Dubbo) | 会话记忆、审批票据、时间线检索 | In-memory Timeline, Dubbo |
 | dish-agent-dish | 20881 (Dubbo) | 菜品 RAG + ReAct | RAGPipeline, Milvus, Cohere |
 | dish-agent-workorder | 20882 (Dubbo) | 库存/订单/退款 + ReAct | InventoryTools, ReActEngine |
 | dish-agent-chat | 20883 (Dubbo) | 闲聊对话 | LLM Chat |
@@ -264,6 +329,30 @@ session:
     default-store-id: ${SESSION_DEFAULT_STORE_ID:STORE_001}
     conflict-strategy: ${SESSION_STORE_CONFLICT_STRATEGY:keep_existing} # keep_existing | prefer_request
 ```
+
+### 记忆存储配置 (dish-memory/src/main/resources/application.yml)
+
+```yaml
+memory:
+  mode: ${MEMORY_MODE:bootstrap} # bootstrap | redis
+  retrieval:
+    vector-dim: ${MEMORY_VECTOR_DIM:128}
+    candidate-fetch-size: ${MEMORY_RETRIEVAL_CANDIDATE_FETCH_SIZE:200}
+    keyword-weight: ${MEMORY_RETRIEVAL_KEYWORD_WEIGHT:0.45}
+    vector-weight: ${MEMORY_RETRIEVAL_VECTOR_WEIGHT:0.55}
+
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+```
+
+- `bootstrap`：本地开发默认模式，使用进程内存时间线。
+- `redis`：生产推荐模式，时间线与审批票据写入 Redis，支持服务重启后保留状态。
+- Redis 模式下，时间线仍然按时间顺序保存在 Redis Sorted Set 中，同时为每条记忆生成向量并持久化，`MemoryReadService` 会做混合检索而不是只做字符串包含。
 
 ## 依赖说明
 

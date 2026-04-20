@@ -26,6 +26,12 @@ class RoutingAgentTest {
         Assertions.assertEquals("意图抽取失败，走安全兜底路径", decision.reason());
         Assertions.assertEquals("SESSION_FAIL", decision.context().getSessionId());
         Assertions.assertEquals("STORE_001", decision.context().getStoreId());
+        Assertions.assertEquals("single", decision.executionMode());
+        Assertions.assertFalse(decision.executionSteps().isEmpty());
+        Assertions.assertEquals(RoutingDecision.TARGET_CHAT, decision.executionSteps().get(0).targetAgent());
+        Assertions.assertEquals(0.2, decision.confidence());
+        Assertions.assertEquals("plan-SESSION_FAIL", decision.planId());
+        Assertions.assertEquals(Boolean.TRUE, decision.metadata().get("fallback"));
     }
 
     @Test
@@ -41,6 +47,11 @@ class RoutingAgentTest {
         Assertions.assertEquals("STORE_007", decision.context().getStoreId());
         Assertions.assertEquals(IntentType.QUERY_ORDER, decision.intent());
         Assertions.assertEquals(RoutingDecision.TARGET_WORK_ORDER, decision.targetAgent());
+        Assertions.assertEquals("single", decision.executionMode());
+        Assertions.assertEquals("plan-SESSION_XYZ", decision.planId());
+        Assertions.assertEquals(1, decision.executionSteps().size());
+        Assertions.assertEquals(RoutingDecision.TARGET_WORK_ORDER, decision.executionSteps().get(0).targetAgent());
+        Assertions.assertEquals("routing-agent-v1", decision.metadata().get("planner"));
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {

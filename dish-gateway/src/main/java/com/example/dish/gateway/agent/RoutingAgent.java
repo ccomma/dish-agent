@@ -2,6 +2,7 @@ package com.example.dish.gateway.agent;
 
 import com.example.dish.common.classifier.IntentType;
 import com.example.dish.common.context.AgentContext;
+import com.example.dish.common.contract.AgentExecutionStep;
 import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.gateway.dto.ExtractedData;
 import com.example.dish.gateway.service.IntentAndParameterExtractor;
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -67,12 +69,24 @@ public class RoutingAgent {
 
         if (extracted.extractionFailed()) {
             log.warn("routing extraction failed: sessionId={}, storeId={}", resolvedSessionId, storeId);
-            return new RoutingDecision(
-                    IntentType.UNKNOWN,
-                    RoutingDecision.TARGET_CHAT,
-                    "意图抽取失败，走安全兜底路径",
-                    context
-            );
+            AgentExecutionStep safeStep = AgentExecutionStep.builder()
+                    .stepId("step-safe-chat")
+                    .targetAgent(RoutingDecision.TARGET_CHAT)
+                    .nodeType("AGENT_CALL")
+                    .timeoutMs(4000)
+                    .required(true)
+                    .build();
+            return RoutingDecision.builder()
+                    .intent(IntentType.UNKNOWN)
+                    .targetAgent(RoutingDecision.TARGET_CHAT)
+                    .reason("意图抽取失败，走安全兜底路径")
+                    .context(context)
+                    .planId("plan-" + resolvedSessionId)
+                    .executionMode("single")
+                    .confidence(0.2)
+                    .executionSteps(List.of(safeStep))
+                    .metadata(Map.of("fallback", true, "source", "extraction_failed"))
+                    .build();
         }
 
         log.info("routing request: sessionId={}, intent={}, storeId={}",
@@ -80,14 +94,27 @@ public class RoutingAgent {
 
         // 4. 确定目标Agent
         String targetAgent = INTENT_TO_AGENT.getOrDefault(extracted.intent(), RoutingDecision.TARGET_CHAT);
+        AgentExecutionStep step = AgentExecutionStep.builder()
+                .stepId("step-1")
+                .targetAgent(targetAgent)
+                .nodeType("AGENT_CALL")
+                .timeoutMs(5000)
+                .required(true)
+                .metadata(Map.of("intent", extracted.intent().name()))
+                .build();
 
         // 5. 生成路由决策
-        return new RoutingDecision(
-            extracted.intent(),
-            targetAgent,
-            generateRoutingReason(extracted.intent()),
-            context
-        );
+        return RoutingDecision.builder()
+                .intent(extracted.intent())
+                .targetAgent(targetAgent)
+                .reason(generateRoutingReason(extracted.intent()))
+                .context(context)
+                .planId("plan-" + resolvedSessionId)
+                .executionMode("single")
+                .confidence(0.9)
+                .executionSteps(List.of(step))
+                .metadata(Map.of("planner", "routing-agent-v1"))
+                .build();
     }
 
     public RoutingDecision route(String userInput, AgentContext existingContext) {

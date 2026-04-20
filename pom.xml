@@ -15,10 +15,14 @@
 
     <modules>
         <module>dish-common</module>
+        <module>dish-control-api</module>
         <module>dish-gateway</module>
         <module>dish-agent-dish</module>
         <module>dish-agent-workorder</module>
         <module>dish-agent-chat</module>
+        <module>dish-planner</module>
+        <module>dish-policy</module>
+        <module>dish-memory</module>
         <module>langchain4j-demo</module>
         <module>langchain4j-enterprise</module>
     </modules>

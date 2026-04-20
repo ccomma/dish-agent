@@ -13,7 +13,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
  * 3. 通过 Dubbo RPC 调用各 Agent 服务
  * 4. 聚合结果返回给客户端
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.example.dish")
 @EnableDiscoveryClient
 public class GatewayApplication {
 

@@ -1,5 +1,6 @@
 package com.example.dish.gateway.controller;
 
+import com.example.dish.gateway.config.GatewayExceptionHandler;
 import com.example.dish.gateway.dto.GatewayResponse;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

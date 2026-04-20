@@ -16,9 +16,15 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Gateway Layer                            │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐ │
-│  │  意图识别    │ →  │   Dubbo RPC │ →  │    结果整合         │ │
-│  │(RoutingAgent)│    │  (路由分发)  │    │ (ResponseAggregator)│ │
+│  │  意图识别    │ →  │ Control API │ →  │    结果整合         │ │
+│  │(RoutingAgent)│    │ + Dubbo RPC │    │ (ResponseAggregator)│ │
 │  └─────────────┘    └─────────────┘    └─────────────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│                      Control Plane Cluster                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
+│  │ dish-planner │  │ dish-policy  │  │     dish-memory      │ │
+│  │  DAG 编排     │  │ 风险门禁/审批 │  │ 记忆时间线/审批票据    │ │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────┤
 │                     Agent Cluster (独立部署)                     │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐ │
@@ -39,6 +45,10 @@
 | 模块 | 端口 | 职责 |
 |------|------|------|
 | dish-gateway | 8080 | HTTP 入口、意图路由、结果聚合 |
+| dish-control-api | - | Control Plane RPC 契约层 |
+| dish-planner | 20884 (Dubbo) | DAG 规划、执行模式生成 |
+| dish-policy | 20885 (Dubbo) | 风险判定、审批门禁 |
+| dish-memory | 20886 (Dubbo) | 会话记忆、审批票据、时间线查询 |
 | dish-agent-dish | 20881 (Dubbo) | 菜品知识 RAG + ReAct 多步推理 |
 | dish-agent-workorder | 20882 (Dubbo) | 库存/订单/退款 + ReAct 多步推理 |
 | dish-agent-chat | 20883 (Dubbo) | 闲聊对话 |
@@ -60,13 +70,13 @@
 mvn compile -s settings-test.xml
 
 # 仅编译微服务模块
-mvn compile -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
+mvn compile -pl dish-common,dish-control-api,dish-memory,dish-planner,dish-policy,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
 
 # 清理并编译
 mvn clean compile -s settings-test.xml
 
 # 打包微服务 JAR
-mvn package -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
+mvn package -pl dish-common,dish-control-api,dish-memory,dish-planner,dish-policy,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
 ```
 
 ### 微服务启动顺序
@@ -75,12 +85,17 @@ mvn package -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,di
 # 1. 启动 Nacos（服务注册与发现）
 docker run -d --name nacos -p 8848:8848 nacos/nacos-server
 
-# 2. 启动 Agent 服务（可并行）
+# 2. 启动 Control Plane 服务（可并行）
+java -jar dish-planner/target/dish-planner.jar
+java -jar dish-policy/target/dish-policy.jar
+java -jar dish-memory/target/dish-memory.jar
+
+# 3. 启动 Agent 服务（可并行）
 java -jar dish-agent-dish/target/dish-agent-dish.jar
 java -jar dish-agent-workorder/target/dish-agent-workorder.jar
 java -jar dish-agent-chat/target/dish-agent-chat.jar
 
-# 3. 启动网关
+# 4. 启动网关
 java -jar dish-gateway/target/dish-gateway.jar
 ```
 
@@ -95,6 +110,33 @@ curl -X POST http://localhost:8080/api/chat/process \
 
 # 健康检查
 curl http://localhost:8080/api/chat/health
+
+# 编排预览
+curl -X POST http://localhost:8080/api/control/plan-preview \
+  -H "Content-Type: application/json" \
+  -H "X-Store-Id: STORE_001" \
+  -d '{"message": "查询订单123并给出后续建议", "sessionId": "SESSION_DEMO"}'
+
+# 查询会话记忆时间线
+curl "http://localhost:8080/api/control/sessions/SESSION_DEMO/memory?limit=10" \
+  -H "X-Store-Id: STORE_001"
+
+# 查询审批票据
+curl http://localhost:8080/api/control/sessions/SESSION_DEMO/approvals/APR-12345678 \
+  -H "X-Store-Id: STORE_001"
+
+# 审批通过
+curl -X POST http://localhost:8080/api/control/sessions/SESSION_DEMO/approvals/APR-12345678/approve \
+  -H "Content-Type: application/json" \
+  -H "X-Store-Id: STORE_001" \
+  -d '{"decidedBy":"ops-user","decisionReason":"人工审核通过"}'
+
+# 控制面 Dashboard
+curl "http://localhost:8080/api/control/dashboard/overview?limit=10" \
+  -H "X-Store-Id: STORE_001"
+
+# 打开控制面页面
+open http://localhost:8080/control/dashboard
 ```
 
 ### 运行教学演示示例
@@ -130,14 +172,28 @@ dish-agent/
 │           ├── WorkOrderAgentService.java # 工单Agent Dubbo接口
 │           └── ChatAgentService.java     # 闲聊Agent Dubbo接口
 │
+├── dish-control-api/                     # Control Plane 独立契约层
+│   └── src/main/java/com/example/dish/control/
+│       ├── planner/                      # planner 请求/响应与服务接口
+│       ├── policy/                       # policy 请求/响应与服务接口
+│       ├── memory/                       # memory 请求/响应与服务接口
+│       └── approval/                     # 审批票据创建/查询/决策契约
+│
 ├── dish-gateway/                         # 网关服务（8080端口）
 │   └── src/main/java/com/example/dish/gateway/
 │       ├── GatewayApplication.java       # Spring Boot 启动类
 │       ├── controller/ChatController.java # HTTP 入口
+│       ├── controller/ControlPlaneController.java # 控制面入口
 │       ├── service/
 │       │   ├── DubboClientService.java    # Dubbo 客户端调用
-│       │   └── ResponseAggregator.java    # 结果聚合
+│       │   ├── ResponseAggregator.java    # 结果聚合
+│       │   ├── OrchestrationControlService.java # 编排/策略/记忆控制面
+│       │   └── ControlPlaneQueryService.java # 会话时间线/审批票据查询
 │       └── agent/RoutingAgent.java        # 意图识别路由
+│
+├── dish-planner/                         # 执行规划服务（Dubbo 20884）
+├── dish-policy/                          # 策略审批服务（Dubbo 20885）
+├── dish-memory/                          # 记忆时间线服务（Dubbo 20886）
 │
 ├── dish-agent-dish/                      # 菜品知识Agent（Dubbo 20881）
 │   └── src/main/java/com/example/dish/
@@ -187,6 +243,8 @@ dish-agent/
 ```
 用户请求 → Gateway:8080 → RoutingAgent (意图识别)
                                     ↓
+                        Planner → Policy → Memory
+                                    ↓
                     ┌───────────────┼───────────────┐
                     ↓               ↓               ↓
             dish-agent-dish  dish-agent-work  dish-agent-chat
@@ -211,6 +269,7 @@ dish-agent/
 
 3. **Dubbo 接口** - 服务间通信契约
    - `DishAgentService`, `WorkOrderAgentService`, `ChatAgentService`
+   - `ExecutionPlannerService`, `PolicyDecisionService`, `MemoryReadService`, `MemoryTimelineService`, `ApprovalTicketService`
 
 ## 技术栈
 
@@ -280,6 +339,19 @@ dish-agent/
 7. **测试基线**
 - 微服务主线至少维护网关层单元测试（会话绑定、路由上下文传递）。
 - 对路由、会话、RAG 加载逻辑的改动，必须同步补充测试或回归验证记录。
+
+8. **控制面约束**
+- `POST /api/control/plan-preview` 只做编排预览，不允许真实执行 Agent。
+- 审批票据应通过 `ApprovalTicketCodec` 以稳定文本格式写入记忆服务，避免跨模块 JSON 版本冲突。
+- `dish-memory` 除基础召回外，还应支持基于 `memoryType`、关键字、元数据过滤的时间线查询。
+- `dish-memory` 需要支持按租户维度跨会话聚合时间线，以服务 Dashboard 聚合接口。
+- 审批必须走 `ApprovalTicketService` 完成创建、查询、批准/拒绝闭环，避免状态只散落在网关内存中。
+- `dish-gateway` 仅依赖 `dish-control-api`，不要再直接依赖 control plane provider 实现模块中的接口类。
+- 可视化页面入口固定为 `GET /control/dashboard`；新增控制台功能时，优先复用现有控制面 API，而不是另开平行接口。
+- `memory.mode=redis` 时，时间线与审批票据必须可在服务重启后恢复；本地测试允许退回 `bootstrap` 内存模式。
+- 长期记忆默认采用双层结构：Redis 存储时间线与审批票据，向量检索层负责语义召回；不要把 `MemoryReadService` 退化回纯字符串匹配。
+- `memory.retrieval.vector-dim`、`memory.retrieval.keyword-weight`、`memory.retrieval.vector-weight` 属于检索质量调优参数，修改时应补充回归测试或效果说明。
+- 新增控制面接口时，优先考虑面试展示价值：可解释编排、审批闭环、记忆时间线、trace 关联。
 
 ## 约束
 

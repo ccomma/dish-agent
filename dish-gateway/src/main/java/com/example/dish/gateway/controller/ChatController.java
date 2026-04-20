@@ -1,18 +1,23 @@
 package com.example.dish.gateway.controller;
 
+import com.example.dish.common.contract.AgentExecutionStep;
 import com.example.dish.common.contract.AgentResponse;
 import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.gateway.agent.RoutingAgent;
 import com.example.dish.gateway.dto.GatewayResponse;
 import com.example.dish.gateway.service.AgentDispatchService;
+import com.example.dish.gateway.service.OrchestrationControlService;
 import com.example.dish.gateway.service.ResponseAggregator;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import java.util.UUID;
+
+import static com.example.dish.gateway.config.TraceIdFilter.TRACE_HEADER;
 
 /**
  * 聊天控制器 - HTTP 入口
@@ -29,6 +34,8 @@ public class ChatController {
     private AgentDispatchService agentDispatchService;
     @Resource
     private ResponseAggregator responseAggregator;
+    @Resource
+    private OrchestrationControlService orchestrationControlService;
 
     /**
      * 处理聊天请求
@@ -56,11 +63,44 @@ public class ChatController {
         log.info("gateway dispatch: sessionId={}, targetAgent={}, intent={}",
                 routing.context().getSessionId(), routing.targetAgent(), routing.intent());
 
-        // 2. 调用对应Agent
-        AgentResponse agentResponse = agentDispatchService.dispatch(routing);
+        String traceId = httpServletRequest.getHeader(TRACE_HEADER);
+        if (traceId == null || traceId.isBlank()) {
+            traceId = "TRC-GW-" + UUID.randomUUID().toString().substring(0, 8);
+        }
 
-        // 3. 聚合结果
-        return responseAggregator.aggregate(agentResponse, routing);
+        // 2. Control Plane: planner -> policy
+        List<AgentExecutionStep> plannedSteps = orchestrationControlService.planSteps(routing, traceId);
+
+        AgentExecutionStep approvalStep = orchestrationControlService.findFirstApprovalRequiredStep(plannedSteps, routing, traceId);
+        if (approvalStep != null) {
+            String approvalId = orchestrationControlService.createApprovalTicket(routing, approvalStep, traceId);
+            GatewayResponse pendingResponse = orchestrationControlService.buildApprovalPendingResponse(routing, traceId, approvalId);
+            orchestrationControlService.writeExecutionSummary(routing, 0, false, traceId);
+            return pendingResponse;
+        }
+
+        List<AgentExecutionStep> allowedSteps = orchestrationControlService.filterAllowedSteps(plannedSteps, routing, traceId);
+        if (!plannedSteps.isEmpty() && allowedSteps.isEmpty()) {
+            GatewayResponse blockedResponse = orchestrationControlService.buildPolicyBlockedResponse(routing, traceId);
+            orchestrationControlService.writeExecutionSummary(routing, 0, false, traceId);
+            return blockedResponse;
+        }
+
+        // 3. 按步骤执行（Phase B：串行编排）
+        List<AgentResponse> responses = agentDispatchService.dispatchAll(routing, allowedSteps);
+
+        // 4. 聚合结果
+        GatewayResponse finalResponse = responseAggregator.aggregate(responses, routing);
+
+        // 5. Memory: 写执行摘要
+        orchestrationControlService.writeExecutionSummary(
+                routing,
+                allowedSteps.size(),
+                finalResponse.isSuccess(),
+                traceId
+        );
+
+        return finalResponse;
     }
 
     @GetMapping("/health")

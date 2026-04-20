@@ -1,0 +1,24 @@
+server:
+  port: 8092
+
+spring:
+  application:
+    name: dish-policy
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        group: ${NACOS_GROUP:DISH_AGENT_GROUP}
+
+dubbo:
+  protocol:
+    name: dubbo
+    port: 20885
+  registry:
+    address: nacos://${NACOS_SERVER_ADDR:localhost:8848}
+  provider:
+    timeout: 8000
+
+policy:
+  mode: ${POLICY_MODE:bootstrap}

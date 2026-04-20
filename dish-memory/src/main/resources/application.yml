@@ -1,0 +1,36 @@
+server:
+  port: 8093
+
+spring:
+  application:
+    name: dish-memory
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:2s}
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        group: ${NACOS_GROUP:DISH_AGENT_GROUP}
+
+dubbo:
+  protocol:
+    name: dubbo
+    port: 20886
+  registry:
+    address: nacos://${NACOS_SERVER_ADDR:localhost:8848}
+  provider:
+    timeout: 5000
+
+memory:
+  mode: ${MEMORY_MODE:bootstrap}
+  retrieval:
+    vector-dim: ${MEMORY_VECTOR_DIM:128}
+    candidate-fetch-size: ${MEMORY_RETRIEVAL_CANDIDATE_FETCH_SIZE:200}
+    keyword-weight: ${MEMORY_RETRIEVAL_KEYWORD_WEIGHT:0.45}
+    vector-weight: ${MEMORY_RETRIEVAL_VECTOR_WEIGHT:0.55}
