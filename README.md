@@ -53,7 +53,8 @@ dish-agent/
 ├── dish-gateway/                        # 网关服务 (8080)
 │   └── com.example.dish.gateway/
 │       ├── controller/ChatController.java
-│       └── service/DubboClientService.java
+│       ├── agent/RoutingAgent.java
+│       └── service/impl/AgentDispatchServiceImpl.java
 │
 ├── dish-agent-dish/                     # 菜品知识Agent (Dubbo 20881)
 │   └── com.example.dish/
@@ -128,6 +129,11 @@ curl http://localhost:8080/api/chat/health
 - 新增主线模块测试：网关新增会话与路由上下文单元测试。
 - 工单后端适配层：`dish-agent-workorder` 新增 `WorkOrderBackendGateway`，支持 `backend.mode=mock|http` 切换。
 - 会话存储可切换：网关支持 `session.store.type=memory|redis`，生产可直接启用 Redis 会话共享。
+- 会话冲突策略可配置：`session.store.conflict-strategy=keep_existing|prefer_request`，支持显式切店策略。
+- 意图抽取失败安全兜底：抽取异常不再静默降级 `GENERAL_CHAT`，统一走安全路径（`UNKNOWN -> chat`）。
+- Agent 分发降级：Dubbo 调用失败时按 Agent 返回差异化降级文案与 follow-up hints。
+- 网关统一异常响应：通过全局异常处理返回结构化错误，避免 raw 500。
+- traceId 跨 Dubbo 透传：网关写入 RPC attachment，Provider 恢复到 MDC，便于跨服务排障。
 
 ## 功能演示
 
@@ -256,6 +262,7 @@ session:
     type: ${SESSION_STORE_TYPE:memory} # memory | redis
     ttl-hours: ${SESSION_STORE_TTL_HOURS:12}
     default-store-id: ${SESSION_DEFAULT_STORE_ID:STORE_001}
+    conflict-strategy: ${SESSION_STORE_CONFLICT_STRATEGY:keep_existing} # keep_existing | prefer_request
 ```
 
 ## 依赖说明

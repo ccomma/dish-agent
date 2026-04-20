@@ -36,6 +36,7 @@ session:
     type: ${SESSION_STORE_TYPE:memory}
     ttl-hours: ${SESSION_STORE_TTL_HOURS:12}
     default-store-id: ${SESSION_DEFAULT_STORE_ID:STORE_001}
+    conflict-strategy: ${SESSION_STORE_CONFLICT_STRATEGY:keep_existing}
 
 logging:
   pattern:

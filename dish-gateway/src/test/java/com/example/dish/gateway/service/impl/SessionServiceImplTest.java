@@ -26,4 +26,22 @@ class SessionServiceImplTest {
 
         Assertions.assertEquals("STORE_001", storeId);
     }
+
+    @Test
+    void shouldPreferRequestStoreWhenStrategyIsPreferRequest() throws Exception {
+        SessionServiceImpl service = new SessionServiceImpl();
+        inject(service, "conflictStrategy", "prefer_request");
+
+        String firstStore = service.resolveStoreId("SESSION_SWITCH", "STORE_001");
+        String switchedStore = service.resolveStoreId("SESSION_SWITCH", "STORE_002");
+
+        Assertions.assertEquals("STORE_001", firstStore);
+        Assertions.assertEquals("STORE_002", switchedStore);
+    }
+
+    private void inject(Object target, String fieldName, Object value) throws Exception {
+        var field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
 }
