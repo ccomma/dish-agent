@@ -34,3 +34,41 @@ memory:
     candidate-fetch-size: ${MEMORY_RETRIEVAL_CANDIDATE_FETCH_SIZE:200}
     keyword-weight: ${MEMORY_RETRIEVAL_KEYWORD_WEIGHT:0.45}
     vector-weight: ${MEMORY_RETRIEVAL_VECTOR_WEIGHT:0.55}
+  long-term:
+    provider: ${MEMORY_LONG_TERM_PROVIDER:inmemory}
+    embedding-provider: ${MEMORY_LONG_TERM_EMBEDDING_PROVIDER:hash}
+    min-score: ${MEMORY_LONG_TERM_MIN_SCORE:0.12}
+    bootstrap:
+      enabled: ${MEMORY_LONG_TERM_BOOTSTRAP_ENABLED:true}
+      pattern: ${MEMORY_LONG_TERM_BOOTSTRAP_PATTERN:classpath*:memory/knowledge/*.md}
+    milvus:
+      host: ${MILVUS_HOST:localhost}
+      port: ${MILVUS_PORT:19530}
+      collection: ${MEMORY_MILVUS_COLLECTION:dish_memory_long_term}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      model: ${MEMORY_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+observability:
+  trace:
+    header: X-Trace-Id
+    rpc-attachment: traceId

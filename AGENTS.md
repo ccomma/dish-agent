@@ -48,7 +48,7 @@
 | dish-control-api | - | Control Plane RPC 契约层 |
 | dish-planner | 20884 (Dubbo) | DAG 规划、执行模式生成 |
 | dish-policy | 20885 (Dubbo) | 风险判定、审批门禁 |
-| dish-memory | 20886 (Dubbo) | 会话记忆、审批票据、时间线查询 |
+| dish-memory | 20886 (Dubbo) | 会话记忆、审批票据、时间线查询、长期知识召回 |
 | dish-agent-dish | 20881 (Dubbo) | 菜品知识 RAG + ReAct 多步推理 |
 | dish-agent-workorder | 20882 (Dubbo) | 库存/订单/退款 + ReAct 多步推理 |
 | dish-agent-chat | 20883 (Dubbo) | 闲聊对话 |
@@ -121,6 +121,22 @@ curl -X POST http://localhost:8080/api/control/plan-preview \
 curl "http://localhost:8080/api/control/sessions/SESSION_DEMO/memory?limit=10" \
   -H "X-Store-Id: STORE_001"
 
+# 查询语义召回解释
+curl "http://localhost:8080/api/control/sessions/SESSION_DEMO/memory/retrieval?query=经理审核退款要记录什么&layers=SHORT_TERM_SESSION,LONG_TERM_KNOWLEDGE" \
+  -H "X-Store-Id: STORE_001"
+
+# 查询某个 session 最近一次 execution
+curl "http://localhost:8080/api/control/sessions/SESSION_DEMO/executions/latest" \
+  -H "X-Store-Id: STORE_001"
+
+# 查询 execution DAG 快照
+curl "http://localhost:8080/api/control/executions/exec-12345678" \
+  -H "X-Store-Id: STORE_001"
+
+# 查询 execution 历史回放
+curl "http://localhost:8080/api/control/executions/exec-12345678/replay" \
+  -H "X-Store-Id: STORE_001"
+
 # 查询审批票据
 curl http://localhost:8080/api/control/sessions/SESSION_DEMO/approvals/APR-12345678 \
   -H "X-Store-Id: STORE_001"
@@ -137,6 +153,12 @@ curl "http://localhost:8080/api/control/dashboard/overview?limit=10" \
 
 # 打开控制面页面
 open http://localhost:8080/control/dashboard
+
+# Prometheus 指标
+curl http://localhost:8080/actuator/prometheus
+curl http://localhost:8091/actuator/prometheus
+curl http://localhost:8092/actuator/prometheus
+curl http://localhost:8093/actuator/prometheus
 ```
 
 ### 运行教学演示示例
@@ -193,7 +215,7 @@ dish-agent/
 │
 ├── dish-planner/                         # 执行规划服务（Dubbo 20884）
 ├── dish-policy/                          # 策略审批服务（Dubbo 20885）
-├── dish-memory/                          # 记忆时间线服务（Dubbo 20886）
+├── dish-memory/                          # 记忆时间线 + 长期知识服务（Dubbo 20886）
 │
 ├── dish-agent-dish/                      # 菜品知识Agent（Dubbo 20881）
 │   └── src/main/java/com/example/dish/
@@ -348,10 +370,25 @@ dish-agent/
 - 审批必须走 `ApprovalTicketService` 完成创建、查询、批准/拒绝闭环，避免状态只散落在网关内存中。
 - `dish-gateway` 仅依赖 `dish-control-api`，不要再直接依赖 control plane provider 实现模块中的接口类。
 - 可视化页面入口固定为 `GET /control/dashboard`；新增控制台功能时，优先复用现有控制面 API，而不是另开平行接口。
+- execution runtime 统一由 Gateway 产出事件、`dish-memory` 持久化 graph snapshot / replay / latest execution 索引；不要在页面层拼装运行态。
+- `GET /api/control/executions/{executionId}/stream` 必须输出稳定 JSON SSE 事件，历史回放接口与实时流接口复用同一事件 DTO。
+- `/api/chat/process` 的真实执行链路必须持续写入 `ExecutionRuntimeWriteService`，不能只在末尾写一条摘要。
+- 所有微服务都应暴露 `/actuator/health`、`/actuator/info`、`/actuator/prometheus`；新增服务时同步补上 `spring-boot-starter-actuator` 和 Prometheus registry。
+- Gateway 的 execution runtime 观测指标由 `ExecutionMetricsService` 统一维护；新增运行态事件时优先补指标而不是散落在控制器里。
+- Gateway 关键执行路径的手工 span 统一通过 `GatewayExecutionTracing` 维护；新增 step 执行或恢复链路时，优先补 span 而不是只打日志。
+- Dubbo Provider 侧的 trace 恢复统一通过 `DubboOpenTelemetrySupport` 完成；不要在各服务里重复手写 attachment 解析。
+- 观测启动资源固定维护在 `ops/observability/`，包括 `docker-compose.yml`、Prometheus 抓取配置、Grafana dashboard、OTLP Collector 和 Tempo 配置。
 - `memory.mode=redis` 时，时间线与审批票据必须可在服务重启后恢复；本地测试允许退回 `bootstrap` 内存模式。
-- 长期记忆默认采用双层结构：Redis 存储时间线与审批票据，向量检索层负责语义召回；不要把 `MemoryReadService` 退化回纯字符串匹配。
+- 长期记忆默认采用双层结构：Redis 存储时间线与审批票据，Milvus 负责 `LONG_TERM_KNOWLEDGE` 语义召回；不要把 `MemoryReadService` 退化回纯字符串匹配。
+- 记忆写入必须分层：`SHORT_TERM_SESSION` 用于执行摘要和短期会话状态，`APPROVAL` 用于审批票据与审批决策，`LONG_TERM_KNOWLEDGE` 用于跨会话可复用经验和启动预热知识。
+- `dish-memory/src/main/resources/memory/knowledge/*.md` 是长期知识预热入口；新增长期知识样例时，优先放在这里而不是散落进 Java 常量。
+- 控制台中的“Semantic Recall Explorer”依赖 `GET /api/control/sessions/{sessionId}/memory/retrieval`；如果调整召回 DTO，必须同步更新控制台展示与测试。
+- 控制台中的 Mission Control DAG 依赖 `GET /api/control/sessions/{sessionId}/executions/latest`、`GET /api/control/executions/{executionId}`、`GET /api/control/executions/{executionId}/replay` 和 execution SSE stream；调整 DTO 时必须同步更新控制台展示与测试。
 - `memory.retrieval.vector-dim`、`memory.retrieval.keyword-weight`、`memory.retrieval.vector-weight` 属于检索质量调优参数，修改时应补充回归测试或效果说明。
+- `memory.long-term.provider`、`memory.long-term.milvus.*`、`memory.long-term.embedding-provider` 属于长期知识层配置，修改后需同步校验本地 fallback 与 Milvus 路径都可用。
 - 新增控制面接口时，优先考虑面试展示价值：可解释编排、审批闭环、记忆时间线、trace 关联。
+- trace 传播规范固定为：HTTP 使用 `X-Trace-Id`，Dubbo RPC attachment 使用 `traceId`，日志模式使用 `traceId=%X{traceId}`。
+- 默认 OTLP 追踪上报端点为 `http://localhost:4318/v1/traces`；调整该配置时需同步检查本地 `ops/observability/` 栈与各微服务 `management.otlp.tracing.endpoint`。
 
 ## 约束
 

@@ -1,7 +1,10 @@
 package com.example.dish.memory.service.impl;
 
+import com.example.dish.common.telemetry.DubboOpenTelemetrySupport;
+import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.memory.model.MemoryReadRequest;
 import com.example.dish.control.memory.model.MemoryReadResult;
+import com.example.dish.control.memory.model.MemoryRetrievalHit;
 import com.example.dish.control.memory.model.MemoryTimelineRequest;
 import com.example.dish.control.memory.service.MemoryReadService;
 import org.apache.dubbo.config.annotation.DubboService;
@@ -11,10 +14,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -23,7 +29,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @DubboService(interfaceClass = MemoryReadService.class, timeout = 5000, retries = 0)
 public class MemoryReadServiceImpl implements MemoryReadService {
 
-    private static final int MAX_RETURN_SNIPPETS = 5;
+    private static final int DEFAULT_LIMIT = 5;
     private static final int REDIS_FETCH_MULTIPLIER = 20;
     private static final Map<String, CopyOnWriteArrayList<MemoryEntry>> STORE = new ConcurrentHashMap<>();
     private static final AtomicLong SEQ = new AtomicLong(0);
@@ -46,51 +52,133 @@ public class MemoryReadServiceImpl implements MemoryReadService {
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
 
+    @Autowired(required = false)
+    private LongTermMemoryVectorStore longTermMemoryVectorStore;
+
     @Override
     public MemoryReadResult read(MemoryReadRequest request) {
-        if (request == null || isBlank(request.tenantId()) || isBlank(request.sessionId())) {
-            return new MemoryReadResult(List.of(), "in-memory", false);
+        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
+                DubboOpenTelemetrySupport.openProviderSpan("memory.read", "dish-memory");
+        try (spanScope) {
+            if (request == null || isBlank(request.tenantId()) || isBlank(request.sessionId())) {
+                return new MemoryReadResult(List.of(), "none", false, List.of());
+            }
+
+            int limit = request.limit() > 0 ? request.limit() : DEFAULT_LIMIT;
+            List<MemoryLayer> layers = normalizedLayers(request.memoryLayers());
+            String query = request.query();
+            double[] queryVector = isBlank(query) ? new double[0] : MemoryVectorSupport.embed(query, vectorDim);
+
+            List<RetrievalCandidate> candidates = new ArrayList<>();
+            candidates.addAll(retrieveOperationalMemory(request, layers, limit, query, queryVector));
+            candidates.addAll(retrieveLongTermMemory(request, layers, limit, query));
+
+            List<MemoryRetrievalHit> hits = candidates.stream()
+                    .sorted(Comparator.comparingDouble(RetrievalCandidate::totalScore).reversed()
+                            .thenComparing(candidate -> candidate.entry().sequence(), Comparator.reverseOrder()))
+                    .limit(limit)
+                    .map(this::toHit)
+                    .toList();
+
+            List<String> snippets = hits.stream()
+                    .map(MemoryRetrievalHit::content)
+                    .toList();
+
+            String source = hits.stream()
+                    .map(MemoryRetrievalHit::retrievalSource)
+                    .filter(Objects::nonNull)
+                    .collect(java.util.stream.Collectors.collectingAndThen(
+                            java.util.stream.Collectors.toCollection(LinkedHashSet::new),
+                            set -> set.isEmpty() ? "none" : String.join(" + ", set)
+                    ));
+
+            return new MemoryReadResult(snippets, source, !hits.isEmpty(), hits);
+        } catch (RuntimeException ex) {
+            spanScope.recordFailure(ex);
+            throw ex;
         }
-
-        List<String> snippets = retrieveSnippets(request);
-
-        return new MemoryReadResult(snippets, source(memoryMode, redisTemplate), !snippets.isEmpty());
     }
 
-    private List<String> retrieveSnippets(MemoryReadRequest request) {
+    private List<RetrievalCandidate> retrieveOperationalMemory(MemoryReadRequest request,
+                                                               List<MemoryLayer> layers,
+                                                               int limit,
+                                                               String query,
+                                                               double[] queryVector) {
+        List<MemoryLayer> operationalLayers = layers.stream()
+                .filter(layer -> layer != MemoryLayer.LONG_TERM_KNOWLEDGE)
+                .toList();
+        if (operationalLayers.isEmpty()) {
+            return List.of();
+        }
+
         MemoryTimelineRequest timelineRequest = new MemoryTimelineRequest(
                 request.tenantId(),
                 request.sessionId(),
                 null,
                 null,
+                null,
                 Map.of(),
-                MAX_RETURN_SNIPPETS,
+                Math.max(limit * REDIS_FETCH_MULTIPLIER, candidateFetchSize),
                 request.traceId()
         );
-        List<MemoryEntry> candidates = collectRetrievalCandidates(memoryMode, redisTemplate, timelineRequest, candidateFetchSize);
+        List<MemoryEntry> candidates = collectRetrievalCandidates(memoryMode, redisTemplate, timelineRequest, candidateFetchSize, operationalLayers);
         if (candidates.isEmpty()) {
             return List.of();
         }
 
-        String query = request.query();
-        if (isBlank(query)) {
-            return candidates.stream()
-                    .sorted(Comparator.comparingLong(MemoryEntry::sequence).reversed())
-                    .limit(MAX_RETURN_SNIPPETS)
-                    .map(MemoryEntry::content)
-                    .toList();
+        return candidates.stream()
+                .map(entry -> {
+                    double keywordScore = isBlank(query) ? 0.0 : scoreKeyword(query, entry);
+                    double vectorScore = isBlank(query) ? 0.0 : semanticScore(entry, queryVector);
+                    double recencyScore = recencyScore(entry);
+                    double totalScore = isBlank(query)
+                            ? recencyScore + 1.0
+                            : keywordWeight * keywordScore + vectorWeight * vectorScore + recencyScore;
+                    return new RetrievalCandidate(
+                            entry,
+                            totalScore,
+                            keywordScore,
+                            vectorScore,
+                            recencyScore,
+                            explain(entry.storageSource(), keywordScore, vectorScore, recencyScore, entry.memoryLayer())
+                    );
+                })
+                .toList();
+    }
+
+    private List<RetrievalCandidate> retrieveLongTermMemory(MemoryReadRequest request,
+                                                            List<MemoryLayer> layers,
+                                                            int limit,
+                                                            String query) {
+        if (!layers.contains(MemoryLayer.LONG_TERM_KNOWLEDGE) || isBlank(query) || longTermMemoryVectorStore == null) {
+            return List.of();
         }
 
-        double[] queryVector = MemoryVectorSupport.embed(query, vectorDim);
-        return candidates.stream()
-                .map(entry -> new RetrievalCandidate(
-                        entry,
-                        scoreEntry(query, queryVector, entry)
-                ))
-                .sorted(Comparator.comparingDouble(RetrievalCandidate::score).reversed()
-                        .thenComparing(candidate -> candidate.entry().sequence(), Comparator.reverseOrder()))
-                .limit(MAX_RETURN_SNIPPETS)
-                .map(candidate -> candidate.entry().content())
+        return longTermMemoryVectorStore.search(request.tenantId(), query, Math.max(limit * 2, DEFAULT_LIMIT)).stream()
+                .map(hit -> {
+                    MemoryEntry entry = new MemoryEntry(
+                            hit.entryId(),
+                            MemoryLayer.LONG_TERM_KNOWLEDGE,
+                            hit.memoryType(),
+                            hit.content(),
+                            hit.metadata(),
+                            hit.traceId(),
+                            hit.createdAt(),
+                            hit.sequence(),
+                            hit.retrievalSource()
+                    );
+                    double keywordScore = scoreKeyword(query, entry);
+                    double vectorScore = hit.vectorScore();
+                    double recencyScore = recencyScore(entry);
+                    return new RetrievalCandidate(
+                            entry,
+                            keywordWeight * keywordScore + vectorWeight * vectorScore + recencyScore,
+                            keywordScore,
+                            vectorScore,
+                            recencyScore,
+                            explain(hit.retrievalSource(), keywordScore, vectorScore, recencyScore, MemoryLayer.LONG_TERM_KNOWLEDGE)
+                    );
+                })
                 .toList();
     }
 
@@ -99,12 +187,13 @@ public class MemoryReadServiceImpl implements MemoryReadService {
                        int vectorDim,
                        String tenantId,
                        String sessionId,
+                       MemoryLayer memoryLayer,
                        String memoryType,
                        String content,
                        Map<String, Object> metadata,
                        String traceId) {
         if (useRedis(memoryMode, redisTemplate)) {
-            appendRedis(redisTemplate, vectorDim, tenantId, sessionId, memoryType, content, metadata, traceId);
+            appendRedis(redisTemplate, vectorDim, tenantId, sessionId, memoryLayer, memoryType, content, metadata, traceId);
             return;
         }
 
@@ -113,12 +202,14 @@ public class MemoryReadServiceImpl implements MemoryReadService {
         STORE.computeIfAbsent(key, ignored -> new CopyOnWriteArrayList<>())
                 .add(new MemoryEntry(
                         entryId(tenantId, sessionId, sequence),
+                        memoryLayer,
                         memoryType,
                         content,
                         metadata == null ? Map.of() : Map.copyOf(metadata),
                         traceId,
                         Instant.now(),
-                        sequence
+                        sequence,
+                        storageSource(memoryLayer, false)
                 ));
     }
 
@@ -134,9 +225,10 @@ public class MemoryReadServiceImpl implements MemoryReadService {
         }
 
         List<MemoryEntry> entries = collectEntries(request.tenantId(), request.sessionId());
-        int limit = request.limit() > 0 ? request.limit() : MAX_RETURN_SNIPPETS;
+        int limit = request.limit() > 0 ? request.limit() : DEFAULT_LIMIT;
 
         return entries.stream()
+                .filter(entry -> request.memoryLayer() == null || request.memoryLayer() == entry.memoryLayer())
                 .filter(entry -> isBlank(request.memoryType()) || request.memoryType().equals(entry.memoryType()))
                 .filter(entry -> isBlank(request.keyword()) || entry.content().contains(request.keyword()))
                 .filter(entry -> matchesMetadata(entry, request.metadataFilters()))
@@ -148,15 +240,19 @@ public class MemoryReadServiceImpl implements MemoryReadService {
     static List<MemoryEntry> collectRetrievalCandidates(String memoryMode,
                                                         StringRedisTemplate redisTemplate,
                                                         MemoryTimelineRequest request,
-                                                        int fetchSize) {
+                                                        int fetchSize,
+                                                        List<MemoryLayer> allowedLayers) {
         if (request == null || isBlank(request.tenantId())) {
             return List.of();
         }
         if (useRedis(memoryMode, redisTemplate)) {
-            return queryEntriesRedis(redisTemplate, request, fetchSize);
+            return queryEntriesRedis(redisTemplate, request, fetchSize).stream()
+                    .filter(entry -> allowedLayers == null || allowedLayers.isEmpty() || allowedLayers.contains(entry.memoryLayer()))
+                    .toList();
         }
         List<MemoryEntry> entries = collectEntries(request.tenantId(), request.sessionId());
         return entries.stream()
+                .filter(entry -> allowedLayers == null || allowedLayers.isEmpty() || allowedLayers.contains(entry.memoryLayer()))
                 .sorted(Comparator.comparingLong(MemoryEntry::sequence).reversed())
                 .limit(fetchSize)
                 .toList();
@@ -202,13 +298,14 @@ public class MemoryReadServiceImpl implements MemoryReadService {
     }
 
     static String source(String memoryMode, StringRedisTemplate redisTemplate) {
-        return useRedis(memoryMode, redisTemplate) ? "redis+vector" : "in-memory+vector";
+        return useRedis(memoryMode, redisTemplate) ? "redis" : "in-memory";
     }
 
     private static void appendRedis(StringRedisTemplate redisTemplate,
                                     int vectorDim,
                                     String tenantId,
                                     String sessionId,
+                                    MemoryLayer memoryLayer,
                                     String memoryType,
                                     String content,
                                     Map<String, Object> metadata,
@@ -216,12 +313,14 @@ public class MemoryReadServiceImpl implements MemoryReadService {
         long sequence = redisTemplate.opsForValue().increment(redisSeqKey(tenantId));
         MemoryEntry entry = new MemoryEntry(
                 entryId(tenantId, sessionId, sequence),
+                memoryLayer,
                 memoryType,
                 content,
                 metadata == null ? Map.of() : Map.copyOf(metadata),
                 traceId,
                 Instant.now(),
-                sequence
+                sequence,
+                storageSource(memoryLayer, true)
         );
         String encoded = MemoryStorageCodec.encode(entry);
         String encodedVector = MemoryVectorSupport.serialize(MemoryVectorSupport.embed(content, vectorDim));
@@ -231,13 +330,13 @@ public class MemoryReadServiceImpl implements MemoryReadService {
     }
 
     private static List<MemoryEntry> queryEntriesRedis(StringRedisTemplate redisTemplate, MemoryTimelineRequest request) {
-        return queryEntriesRedis(redisTemplate, request, Math.max((request.limit() > 0 ? request.limit() : MAX_RETURN_SNIPPETS) * REDIS_FETCH_MULTIPLIER, 100));
+        return queryEntriesRedis(redisTemplate, request, Math.max((request.limit() > 0 ? request.limit() : DEFAULT_LIMIT) * REDIS_FETCH_MULTIPLIER, 100));
     }
 
     private static List<MemoryEntry> queryEntriesRedis(StringRedisTemplate redisTemplate,
                                                        MemoryTimelineRequest request,
                                                        int fetchSize) {
-        int limit = request.limit() > 0 ? request.limit() : MAX_RETURN_SNIPPETS;
+        int limit = request.limit() > 0 ? request.limit() : DEFAULT_LIMIT;
         String key = isBlank(request.sessionId())
                 ? redisTenantTimelineKey(request.tenantId())
                 : redisSessionTimelineKey(request.tenantId(), request.sessionId());
@@ -249,6 +348,7 @@ public class MemoryReadServiceImpl implements MemoryReadService {
         return encodedEntries.stream()
                 .map(MemoryStorageCodec::decode)
                 .filter(Objects::nonNull)
+                .filter(entry -> request.memoryLayer() == null || request.memoryLayer() == entry.memoryLayer())
                 .filter(entry -> isBlank(request.memoryType()) || request.memoryType().equals(entry.memoryType()))
                 .filter(entry -> isBlank(request.keyword()) || entry.content().contains(request.keyword()))
                 .filter(entry -> matchesMetadata(entry, request.metadataFilters()))
@@ -300,18 +400,10 @@ public class MemoryReadServiceImpl implements MemoryReadService {
         return true;
     }
 
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
-
-    private double scoreEntry(String query, double[] queryVector, MemoryEntry entry) {
-        double keywordScore = entry.content().contains(query) ? 1.0 : MemoryVectorSupport.keywordOverlap(query, entry.content());
-        double vectorScore = semanticScore(entry, queryVector);
-        double recencyBonus = Math.min(entry.sequence() / 10_000.0, 0.15);
-        return keywordWeight * keywordScore + vectorWeight * vectorScore + recencyBonus;
-    }
-
     private double semanticScore(MemoryEntry entry, double[] queryVector) {
+        if (queryVector == null || queryVector.length == 0) {
+            return 0;
+        }
         if (useRedis(memoryMode, redisTemplate) && entry.entryId() != null) {
             String payload = redisTemplate.opsForValue().get(redisVectorKey(entry.entryId()));
             if (payload != null) {
@@ -321,15 +413,77 @@ public class MemoryReadServiceImpl implements MemoryReadService {
         return MemoryVectorSupport.cosine(queryVector, MemoryVectorSupport.embed(entry.content(), vectorDim));
     }
 
-    private record RetrievalCandidate(MemoryEntry entry, double score) {
+    private double scoreKeyword(String query, MemoryEntry entry) {
+        return entry.content().contains(query) ? 1.0 : MemoryVectorSupport.keywordOverlap(query, entry.content());
+    }
+
+    private double recencyScore(MemoryEntry entry) {
+        return Math.min(entry.sequence() / 10_000_000_000.0, 0.15);
+    }
+
+    private MemoryRetrievalHit toHit(RetrievalCandidate candidate) {
+        return new MemoryRetrievalHit(
+                candidate.entry().memoryType(),
+                candidate.entry().memoryLayer(),
+                candidate.entry().content(),
+                candidate.entry().metadata(),
+                candidate.entry().traceId(),
+                candidate.entry().createdAt(),
+                candidate.entry().sequence(),
+                candidate.entry().storageSource(),
+                candidate.totalScore(),
+                candidate.keywordScore(),
+                candidate.vectorScore(),
+                candidate.recencyScore(),
+                candidate.explanation()
+        );
+    }
+
+    private String explain(String source, double keywordScore, double vectorScore, double recencyScore, MemoryLayer layer) {
+        return "layer=" + layer.name()
+                + ", source=" + source
+                + ", keyword=" + String.format("%.3f", keywordScore)
+                + ", vector=" + String.format("%.3f", vectorScore)
+                + ", recency=" + String.format("%.3f", recencyScore);
+    }
+
+    private List<MemoryLayer> normalizedLayers(List<MemoryLayer> layers) {
+        if (layers == null || layers.isEmpty()) {
+            return List.of(MemoryLayer.SHORT_TERM_SESSION, MemoryLayer.APPROVAL, MemoryLayer.LONG_TERM_KNOWLEDGE);
+        }
+        Set<MemoryLayer> dedup = new LinkedHashSet<>(layers);
+        return List.copyOf(dedup);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static String storageSource(MemoryLayer layer, boolean redis) {
+        String prefix = redis ? "redis" : "in-memory";
+        return switch (layer) {
+            case SHORT_TERM_SESSION -> prefix + "-short-term";
+            case APPROVAL -> prefix + "-approval";
+            case LONG_TERM_KNOWLEDGE -> prefix + "-long-term";
+        };
+    }
+
+    private record RetrievalCandidate(MemoryEntry entry,
+                                      double totalScore,
+                                      double keywordScore,
+                                      double vectorScore,
+                                      double recencyScore,
+                                      String explanation) {
     }
 
     static record MemoryEntry(String entryId,
+                              MemoryLayer memoryLayer,
                               String memoryType,
                               String content,
                               Map<String, Object> metadata,
                               String traceId,
                               Instant createdAt,
-                              long sequence) {
+                              long sequence,
+                              String storageSource) {
     }
 }

@@ -1,5 +1,6 @@
 package com.example.dish.gateway.config;
 
+import com.example.dish.common.telemetry.DubboOpenTelemetrySupport;
 import org.apache.dubbo.rpc.RpcContext;
 import org.slf4j.MDC;
 
@@ -18,5 +19,6 @@ public final class DubboTraceContextSupport {
         if (traceId != null && !traceId.isBlank()) {
             RpcContext.getServiceContext().setAttachment(TRACE_ID_KEY, traceId);
         }
+        DubboOpenTelemetrySupport.injectCurrentContext();
     }
 }

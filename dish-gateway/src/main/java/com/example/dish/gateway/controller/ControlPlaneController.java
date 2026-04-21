@@ -3,12 +3,16 @@ package com.example.dish.gateway.controller;
 import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.gateway.agent.RoutingAgent;
 import com.example.dish.control.approval.model.ApprovalDecisionAction;
+import com.example.dish.control.execution.model.ExecutionGraphViewResult;
+import com.example.dish.control.execution.model.ExecutionReplayResult;
 import com.example.dish.gateway.dto.control.ApprovalDecisionResponse;
 import com.example.dish.gateway.dto.control.ApprovalTicketViewResponse;
 import com.example.dish.gateway.dto.control.ControlDashboardOverviewResponse;
 import com.example.dish.gateway.dto.control.PlanPreviewResponse;
+import com.example.dish.gateway.dto.control.SessionMemoryRetrievalResponse;
 import com.example.dish.gateway.dto.control.SessionMemoryTimelineResponse;
 import com.example.dish.gateway.service.ControlPlaneQueryService;
+import com.example.dish.gateway.service.ExecutionEventPublisher;
 import com.example.dish.gateway.service.OrchestrationControlService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,11 +23,13 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import javax.annotation.Resource;
 import java.util.UUID;
 
 import static com.example.dish.gateway.config.TraceIdFilter.TRACE_HEADER;
+import static org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE;
 
 @RestController
 @RequestMapping("/api/control")
@@ -37,6 +43,8 @@ public class ControlPlaneController {
     private OrchestrationControlService orchestrationControlService;
     @Resource
     private ControlPlaneQueryService controlPlaneQueryService;
+    @Resource
+    private ExecutionEventPublisher executionEventPublisher;
 
     @PostMapping("/plan-preview")
     public PlanPreviewResponse previewPlan(@RequestBody PlanPreviewRequest request, HttpServletRequest httpServletRequest) {
@@ -59,6 +67,42 @@ public class ControlPlaneController {
                                                          @RequestParam(required = false, defaultValue = "20") int limit,
                                                          @RequestHeader(value = TRACE_HEADER, required = false) String traceId) {
         return controlPlaneQueryService.getSessionTimeline(storeId, sessionId, memoryType, keyword, limit, resolveTraceId(traceId));
+    }
+
+    @GetMapping("/sessions/{sessionId}/memory/retrieval")
+    public SessionMemoryRetrievalResponse retrieveMemory(@PathVariable String sessionId,
+                                                         @RequestHeader(value = STORE_HEADER, required = false) String storeId,
+                                                         @RequestParam String query,
+                                                         @RequestParam(required = false) String layers,
+                                                         @RequestParam(required = false, defaultValue = "5") int limit,
+                                                         @RequestHeader(value = TRACE_HEADER, required = false) String traceId) {
+        return controlPlaneQueryService.retrieveSessionMemory(storeId, sessionId, query, layers, limit, resolveTraceId(traceId));
+    }
+
+    @GetMapping("/sessions/{sessionId}/executions/latest")
+    public ExecutionGraphViewResult latestExecution(@PathVariable String sessionId,
+                                                    @RequestHeader(value = STORE_HEADER, required = false) String storeId,
+                                                    @RequestHeader(value = TRACE_HEADER, required = false) String traceId) {
+        return controlPlaneQueryService.getLatestExecution(storeId, sessionId, resolveTraceId(traceId));
+    }
+
+    @GetMapping("/executions/{executionId}")
+    public ExecutionGraphViewResult executionGraph(@PathVariable String executionId,
+                                                   @RequestHeader(value = STORE_HEADER, required = false) String storeId,
+                                                   @RequestHeader(value = TRACE_HEADER, required = false) String traceId) {
+        return controlPlaneQueryService.getExecutionGraph(storeId, executionId, resolveTraceId(traceId));
+    }
+
+    @GetMapping("/executions/{executionId}/replay")
+    public ExecutionReplayResult executionReplay(@PathVariable String executionId,
+                                                 @RequestHeader(value = STORE_HEADER, required = false) String storeId,
+                                                 @RequestHeader(value = TRACE_HEADER, required = false) String traceId) {
+        return controlPlaneQueryService.getExecutionReplay(storeId, executionId, resolveTraceId(traceId));
+    }
+
+    @GetMapping(value = "/executions/{executionId}/stream", produces = TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter executionStream(@PathVariable String executionId) {
+        return executionEventPublisher.subscribe(executionId);
     }
 
     @GetMapping("/sessions/{sessionId}/approvals/{approvalId}")

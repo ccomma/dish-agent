@@ -4,6 +4,7 @@ import java.io.Serializable;
 
 public record ApprovalTicketCreateRequest(
         String approvalId,
+        String executionId,
         String tenantId,
         String sessionId,
         String traceId,

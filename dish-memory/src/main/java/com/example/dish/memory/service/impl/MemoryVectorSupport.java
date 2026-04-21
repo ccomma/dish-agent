@@ -73,6 +73,17 @@ final class MemoryVectorSupport {
         return vector;
     }
 
+    static float[] toFloatVector(double[] vector) {
+        if (vector == null || vector.length == 0) {
+            return new float[0];
+        }
+        float[] result = new float[vector.length];
+        for (int i = 0; i < vector.length; i++) {
+            result[i] = (float) vector[i];
+        }
+        return result;
+    }
+
     static double keywordOverlap(String query, String content) {
         Set<String> queryTokens = new LinkedHashSet<>(tokenize(query));
         Set<String> contentTokens = new LinkedHashSet<>(tokenize(content));

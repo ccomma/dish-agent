@@ -2,12 +2,14 @@ package com.example.dish.memory.service.impl;
 
 import com.example.dish.common.runtime.ApprovalTicket;
 import com.example.dish.common.runtime.ApprovalTicketStatus;
+import com.example.dish.common.telemetry.DubboOpenTelemetrySupport;
 import com.example.dish.control.approval.model.ApprovalDecisionAction;
 import com.example.dish.control.approval.model.ApprovalTicketCommandResult;
 import com.example.dish.control.approval.model.ApprovalTicketCreateRequest;
 import com.example.dish.control.approval.model.ApprovalTicketDecisionRequest;
 import com.example.dish.control.approval.model.ApprovalTicketQueryRequest;
 import com.example.dish.control.approval.model.ApprovalTicketQueryResult;
+import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.approval.service.ApprovalTicketService;
 import com.example.dish.control.support.ApprovalTicketCodec;
 import org.apache.dubbo.config.annotation.DubboService;
@@ -38,80 +40,102 @@ public class ApprovalTicketServiceImpl implements ApprovalTicketService {
 
     @Override
     public ApprovalTicketCommandResult create(ApprovalTicketCreateRequest request) {
-        if (request == null || blank(request.tenantId()) || blank(request.sessionId()) || blank(request.approvalId())) {
-            return new ApprovalTicketCommandResult(false, null, "invalid approval create request");
+        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
+                DubboOpenTelemetrySupport.openProviderSpan("approval.create", "dish-memory");
+        try (spanScope) {
+            if (request == null || blank(request.tenantId()) || blank(request.sessionId()) || blank(request.approvalId())) {
+                return new ApprovalTicketCommandResult(false, null, "invalid approval create request");
+            }
+
+            ApprovalTicket ticket = new ApprovalTicket(
+                    request.approvalId(),
+                    request.executionId(),
+                    request.nodeId(),
+                    ApprovalTicketStatus.PENDING,
+                    request.requestedBy(),
+                    null,
+                    request.decisionReason(),
+                    Instant.now(),
+                    null,
+                    metadataMap(
+                            "targetAgent", request.targetAgent(),
+                            "intent", request.intent(),
+                            "sessionId", request.sessionId(),
+                            "storeId", request.tenantId(),
+                            "planId", request.planId(),
+                            "executionId", request.executionId()
+                    ),
+                    metadataMap("traceId", request.traceId())
+            );
+
+            saveTicket(request.tenantId(), request.sessionId(), ticket);
+            writeApprovalTimeline(request.tenantId(), request.sessionId(), request.traceId(), ticket);
+            return new ApprovalTicketCommandResult(true, ticket, "approval ticket created");
+        } catch (RuntimeException ex) {
+            spanScope.recordFailure(ex);
+            throw ex;
         }
-
-        ApprovalTicket ticket = new ApprovalTicket(
-                request.approvalId(),
-                request.traceId(),
-                request.nodeId(),
-                ApprovalTicketStatus.PENDING,
-                request.requestedBy(),
-                null,
-                request.decisionReason(),
-                Instant.now(),
-                null,
-                metadataMap(
-                        "targetAgent", request.targetAgent(),
-                        "intent", request.intent(),
-                        "sessionId", request.sessionId(),
-                        "storeId", request.tenantId(),
-                        "planId", request.planId()
-                ),
-                metadataMap("traceId", request.traceId())
-        );
-
-        saveTicket(request.tenantId(), request.sessionId(), ticket);
-        writeApprovalTimeline(request.tenantId(), request.sessionId(), request.traceId(), ticket);
-        return new ApprovalTicketCommandResult(true, ticket, "approval ticket created");
     }
 
     @Override
     public ApprovalTicketCommandResult decide(ApprovalTicketDecisionRequest request) {
-        if (request == null || blank(request.tenantId()) || blank(request.sessionId()) || blank(request.approvalId()) || request.action() == null) {
-            return new ApprovalTicketCommandResult(false, null, "invalid approval decision request");
+        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
+                DubboOpenTelemetrySupport.openProviderSpan("approval.decide", "dish-memory");
+        try (spanScope) {
+            if (request == null || blank(request.tenantId()) || blank(request.sessionId()) || blank(request.approvalId()) || request.action() == null) {
+                return new ApprovalTicketCommandResult(false, null, "invalid approval decision request");
+            }
+
+            ApprovalTicket current = findTicket(request.tenantId(), request.sessionId(), request.approvalId());
+            if (current == null) {
+                return new ApprovalTicketCommandResult(false, null, "approval ticket not found");
+            }
+
+            ApprovalTicketStatus nextStatus = request.action() == ApprovalDecisionAction.APPROVE
+                    ? ApprovalTicketStatus.APPROVED
+                    : ApprovalTicketStatus.REJECTED;
+
+            ApprovalTicket updated = new ApprovalTicket(
+                    current.ticketId(),
+                    current.executionId(),
+                    current.nodeId(),
+                    nextStatus,
+                    current.requestedBy(),
+                    request.decidedBy(),
+                    request.decisionReason(),
+                    current.createdAt(),
+                    Instant.now(),
+                    current.payload(),
+                    mergeMetadata(current.metadata(), request.traceId())
+            );
+
+            saveTicket(request.tenantId(), request.sessionId(), updated);
+            writeApprovalTimeline(request.tenantId(), request.sessionId(), request.traceId(), updated);
+            return new ApprovalTicketCommandResult(true, updated, nextStatus.name().toLowerCase() + " successfully");
+        } catch (RuntimeException ex) {
+            spanScope.recordFailure(ex);
+            throw ex;
         }
-
-        ApprovalTicket current = findTicket(request.tenantId(), request.sessionId(), request.approvalId());
-        if (current == null) {
-            return new ApprovalTicketCommandResult(false, null, "approval ticket not found");
-        }
-
-        ApprovalTicketStatus nextStatus = request.action() == ApprovalDecisionAction.APPROVE
-                ? ApprovalTicketStatus.APPROVED
-                : ApprovalTicketStatus.REJECTED;
-
-        ApprovalTicket updated = new ApprovalTicket(
-                current.ticketId(),
-                request.traceId() != null ? request.traceId() : current.executionId(),
-                current.nodeId(),
-                nextStatus,
-                current.requestedBy(),
-                request.decidedBy(),
-                request.decisionReason(),
-                current.createdAt(),
-                Instant.now(),
-                current.payload(),
-                mergeMetadata(current.metadata(), request.traceId())
-        );
-
-        saveTicket(request.tenantId(), request.sessionId(), updated);
-        writeApprovalTimeline(request.tenantId(), request.sessionId(), request.traceId(), updated);
-        return new ApprovalTicketCommandResult(true, updated, nextStatus.name().toLowerCase() + " successfully");
     }
 
     @Override
     public ApprovalTicketQueryResult get(ApprovalTicketQueryRequest request) {
-        if (request == null || blank(request.tenantId()) || blank(request.sessionId()) || blank(request.approvalId())) {
-            return new ApprovalTicketQueryResult(false, null, "invalid approval query request");
-        }
+        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
+                DubboOpenTelemetrySupport.openProviderSpan("approval.get", "dish-memory");
+        try (spanScope) {
+            if (request == null || blank(request.tenantId()) || blank(request.sessionId()) || blank(request.approvalId())) {
+                return new ApprovalTicketQueryResult(false, null, "invalid approval query request");
+            }
 
-        ApprovalTicket ticket = findTicket(request.tenantId(), request.sessionId(), request.approvalId());
-        if (ticket == null) {
-            return new ApprovalTicketQueryResult(false, null, "approval ticket not found");
+            ApprovalTicket ticket = findTicket(request.tenantId(), request.sessionId(), request.approvalId());
+            if (ticket == null) {
+                return new ApprovalTicketQueryResult(false, null, "approval ticket not found");
+            }
+            return new ApprovalTicketQueryResult(true, ticket, "ok");
+        } catch (RuntimeException ex) {
+            spanScope.recordFailure(ex);
+            throw ex;
         }
-        return new ApprovalTicketQueryResult(true, ticket, "ok");
     }
 
     static void clearForTest() {
@@ -125,6 +149,7 @@ public class ApprovalTicketServiceImpl implements ApprovalTicketService {
                 vectorDim,
                 tenantId,
                 sessionId,
+                MemoryLayer.APPROVAL,
                 "approval_ticket",
                 ApprovalTicketCodec.encode(ticket),
                 metadataMap(

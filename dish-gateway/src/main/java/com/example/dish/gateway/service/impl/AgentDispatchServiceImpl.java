@@ -56,9 +56,20 @@ public class AgentDispatchServiceImpl implements AgentDispatchService {
 
         List<AgentResponse> responses = new ArrayList<>();
         for (AgentExecutionStep step : steps) {
-            responses.add(dispatchToTarget(routing, step.targetAgent()));
+            responses.add(dispatchStep(routing, step));
         }
         return responses;
+    }
+
+    @Override
+    public AgentResponse dispatchStep(RoutingDecision routing, AgentExecutionStep step) {
+        if (routing == null) {
+            throw new IllegalArgumentException("路由决策不能为空");
+        }
+        if (step == null || step.targetAgent() == null || step.targetAgent().isBlank()) {
+            return dispatch(routing);
+        }
+        return dispatchToTarget(routing, step.targetAgent());
     }
 
     private AgentResponse dispatchToTarget(RoutingDecision routing, String targetAgent) {

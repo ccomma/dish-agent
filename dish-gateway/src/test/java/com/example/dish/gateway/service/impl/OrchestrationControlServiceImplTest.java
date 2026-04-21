@@ -17,7 +17,9 @@ import com.example.dish.control.approval.model.ApprovalTicketDecisionRequest;
 import com.example.dish.control.approval.model.ApprovalTicketQueryRequest;
 import com.example.dish.control.approval.model.ApprovalTicketQueryResult;
 import com.example.dish.control.approval.service.ApprovalTicketService;
+import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.memory.model.MemoryReadResult;
+import com.example.dish.control.memory.model.MemoryRetrievalHit;
 import com.example.dish.control.memory.service.MemoryReadService;
 import com.example.dish.control.memory.service.MemoryWriteService;
 import com.example.dish.control.planner.model.PlanningResult;
@@ -187,7 +189,7 @@ class OrchestrationControlServiceImplTest {
                 .nodeType("AGENT_CALL")
                 .build();
 
-        String approvalId = service.createApprovalTicket(routing, step, "trace-15");
+        String approvalId = service.createApprovalTicket(routing, "exec-15", step, "trace-15");
 
         Assertions.assertTrue(approvalId.startsWith("APR-"));
         Assertions.assertTrue(created.get());
@@ -293,7 +295,22 @@ class OrchestrationControlServiceImplTest {
         inject(service, "memoryReadService", (MemoryReadService) request -> new MemoryReadResult(
                 List.of("用户上次问过订单状态"),
                 "test-memory",
-                true
+                true,
+                List.of(new MemoryRetrievalHit(
+                        "execution_summary",
+                        MemoryLayer.SHORT_TERM_SESSION,
+                        "用户上次问过订单状态",
+                        Map.of("sessionId", "S-18"),
+                        "trace-memory",
+                        java.time.Instant.parse("2026-04-21T10:15:30Z"),
+                        8L,
+                        "redis-short-term",
+                        0.88,
+                        0.52,
+                        0.91,
+                        0.04,
+                        "layer=SHORT_TERM_SESSION, source=redis-short-term, keyword=0.520, vector=0.910, recency=0.040"
+                ))
         ));
 
         RoutingDecision routing = RoutingDecision.builder()
@@ -308,8 +325,12 @@ class OrchestrationControlServiceImplTest {
 
         Assertions.assertEquals("trace-18", preview.traceId());
         Assertions.assertTrue(preview.memoryHit());
+        Assertions.assertEquals("test-memory", preview.memorySource());
+        Assertions.assertEquals(1, preview.memoryHits().size());
         Assertions.assertEquals(1, preview.approvalRequiredCount());
         Assertions.assertEquals(2, preview.steps().size());
+        Assertions.assertEquals(2, preview.graphNodes().size());
+        Assertions.assertEquals(1, preview.graphEdges().size());
         Assertions.assertEquals("REQUIRE_APPROVAL", preview.steps().get(0).policyDecision());
         Assertions.assertEquals(List.of("n1"), preview.steps().get(1).dependsOn());
     }

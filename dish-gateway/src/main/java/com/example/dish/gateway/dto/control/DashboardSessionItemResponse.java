@@ -7,6 +7,8 @@ public record DashboardSessionItemResponse(
         String lastMemoryType,
         String lastTraceId,
         Instant lastUpdatedAt,
-        int eventCount
+        int eventCount,
+        String latestExecutionId,
+        String latestExecutionStatus
 ) {
 }

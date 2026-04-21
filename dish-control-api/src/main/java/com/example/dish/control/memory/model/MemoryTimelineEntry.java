@@ -6,10 +6,12 @@ import java.util.Map;
 
 public record MemoryTimelineEntry(
         String memoryType,
+        MemoryLayer memoryLayer,
         String content,
         Map<String, Object> metadata,
         String traceId,
         Instant createdAt,
-        long sequence
+        long sequence,
+        String storageSource
 ) implements Serializable {
 }

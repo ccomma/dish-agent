@@ -113,6 +113,39 @@ class AgentDispatchServiceImplTest {
         Assertions.assertEquals("single-chat", responses.get(0).getContent());
     }
 
+    @Test
+    void shouldDispatchSingleStepByTargetAgent() throws Exception {
+        AgentDispatchServiceImpl service = new AgentDispatchServiceImpl();
+        inject(service, "dishAgentService", new DishAgentService() {
+            @Override
+            public AgentResponse answer(String userInput, AgentContext context) {
+                return AgentResponse.success("unused", "dish-agent", context);
+            }
+
+            @Override
+            public AgentResponse answerWithReflection(String userInput, AgentContext context) {
+                return AgentResponse.success("dish-step-ok", "dish-agent", context);
+            }
+        });
+
+        AgentContext context = AgentContext.builder()
+                .sessionId("S-4004")
+                .userInput("讲讲宫保鸡丁")
+                .intent(IntentType.DISH_QUESTION)
+                .build();
+        RoutingDecision routing = new RoutingDecision(IntentType.DISH_QUESTION, RoutingDecision.TARGET_DISH_KNOWLEDGE, "test", context);
+        AgentExecutionStep step = AgentExecutionStep.builder()
+                .stepId("dish-1")
+                .targetAgent(RoutingDecision.TARGET_DISH_KNOWLEDGE)
+                .nodeType("AGENT_CALL")
+                .build();
+
+        AgentResponse response = service.dispatchStep(routing, step);
+
+        Assertions.assertTrue(response.isSuccess());
+        Assertions.assertEquals("dish-step-ok", response.getContent());
+    }
+
     private void inject(Object target, String fieldName, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

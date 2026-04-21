@@ -35,7 +35,7 @@ public interface OrchestrationControlService {
     /**
      * 创建并写入审批单，返回审批单ID。
      */
-    String createApprovalTicket(RoutingDecision routing, AgentExecutionStep step, String traceId);
+    String createApprovalTicket(RoutingDecision routing, String executionId, AgentExecutionStep step, String traceId);
 
     /**
      * 构建待审批响应。

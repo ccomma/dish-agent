@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: dish-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+
+  - job_name: dish-planner
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8091"]
+
+  - job_name: dish-policy
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8092"]
+
+  - job_name: dish-memory
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8093"]
+
+  - job_name: dish-agent-dish
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+
+  - job_name: dish-agent-workorder
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8082"]
+
+  - job_name: dish-agent-chat
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8083"]

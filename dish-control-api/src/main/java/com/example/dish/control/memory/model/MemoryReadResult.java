@@ -6,6 +6,7 @@ import java.util.List;
 public record MemoryReadResult(
         List<String> snippets,
         String source,
-        boolean hit
+        boolean hit,
+        List<MemoryRetrievalHit> hits
 ) implements Serializable {
 }

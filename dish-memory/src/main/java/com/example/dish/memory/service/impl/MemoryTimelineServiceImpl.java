@@ -1,5 +1,6 @@
 package com.example.dish.memory.service.impl;
 
+import com.example.dish.common.telemetry.DubboOpenTelemetrySupport;
 import com.example.dish.control.memory.model.MemoryTimelineEntry;
 import com.example.dish.control.memory.model.MemoryTimelineRequest;
 import com.example.dish.control.memory.model.MemoryTimelineResult;
@@ -24,17 +25,26 @@ public class MemoryTimelineServiceImpl implements MemoryTimelineService {
 
     @Override
     public MemoryTimelineResult timeline(MemoryTimelineRequest request) {
-        List<MemoryReadServiceImpl.MemoryEntry> entries = MemoryReadServiceImpl.queryEntries(memoryMode, redisTemplate, request);
-        List<MemoryTimelineEntry> timelineEntries = entries.stream()
-                .map(entry -> new MemoryTimelineEntry(
-                        entry.memoryType(),
-                        entry.content(),
-                        entry.metadata(),
-                        entry.traceId(),
-                        entry.createdAt(),
-                        entry.sequence()
-                ))
-                .toList();
-        return new MemoryTimelineResult(timelineEntries, MemoryReadServiceImpl.source(memoryMode, redisTemplate), timelineEntries.size());
+        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
+                DubboOpenTelemetrySupport.openProviderSpan("memory.timeline", "dish-memory");
+        try (spanScope) {
+            List<MemoryReadServiceImpl.MemoryEntry> entries = MemoryReadServiceImpl.queryEntries(memoryMode, redisTemplate, request);
+            List<MemoryTimelineEntry> timelineEntries = entries.stream()
+                    .map(entry -> new MemoryTimelineEntry(
+                            entry.memoryType(),
+                            entry.memoryLayer(),
+                            entry.content(),
+                            entry.metadata(),
+                            entry.traceId(),
+                            entry.createdAt(),
+                            entry.sequence(),
+                            entry.storageSource()
+                    ))
+                    .toList();
+            return new MemoryTimelineResult(timelineEntries, MemoryReadServiceImpl.source(memoryMode, redisTemplate), timelineEntries.size());
+        } catch (RuntimeException ex) {
+            spanScope.recordFailure(ex);
+            throw ex;
+        }
     }
 }

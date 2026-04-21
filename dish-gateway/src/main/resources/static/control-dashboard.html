@@ -3,28 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dish Agent Control Plane</title>
+    <title>Dish Agent Mission Control</title>
     <style>
         :root {
-            --bg: #14110f;
-            --bg-soft: #1d1815;
-            --panel: rgba(40, 31, 25, 0.78);
-            --panel-strong: rgba(56, 43, 35, 0.95);
-            --line: rgba(244, 223, 197, 0.16);
-            --text: #f7efe2;
-            --muted: #c8b59f;
-            --accent: #efb366;
-            --accent-strong: #ff7d4d;
-            --success: #9fcb8b;
-            --warning: #f1c96b;
-            --danger: #ec8877;
-            --shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
-            --radius-xl: 28px;
-            --radius-lg: 20px;
+            --bg: #090b12;
+            --bg-soft: #111722;
+            --panel: rgba(19, 27, 41, 0.82);
+            --panel-strong: rgba(13, 19, 31, 0.96);
+            --line: rgba(165, 186, 255, 0.12);
+            --text: #eef4ff;
+            --muted: #98a9c8;
+            --accent: #5fb4ff;
+            --accent-strong: #49e0c1;
+            --success: #82d58a;
+            --warning: #f3c868;
+            --danger: #f38a8a;
+            --pending: #6d7d97;
+            --shadow: 0 30px 90px rgba(0, 0, 0, 0.36);
+            --radius-xl: 26px;
+            --radius-lg: 18px;
             --radius-md: 14px;
-            --display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+            --display: "Avenir Next Condensed", "Segoe UI", sans-serif;
             --body: "Avenir Next", "Segoe UI", sans-serif;
-            --mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", monospace;
+            --mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", monospace;
         }
 
         * {
@@ -34,12 +35,12 @@
         html, body {
             margin: 0;
             min-height: 100%;
-            background:
-                radial-gradient(circle at top left, rgba(255, 141, 77, 0.16), transparent 30%),
-                radial-gradient(circle at 85% 10%, rgba(239, 179, 102, 0.14), transparent 22%),
-                linear-gradient(135deg, #0f0c0a 0%, #18120f 42%, #120f0d 100%);
             color: var(--text);
             font-family: var(--body);
+            background:
+                radial-gradient(circle at top left, rgba(95, 180, 255, 0.18), transparent 28%),
+                radial-gradient(circle at 85% 0%, rgba(73, 224, 193, 0.12), transparent 24%),
+                linear-gradient(140deg, #05070d 0%, #09111d 32%, #0d1320 62%, #080b13 100%);
         }
 
         body::before {
@@ -48,47 +49,44 @@
             inset: 0;
             pointer-events: none;
             background-image:
-                linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
-            background-size: 28px 28px;
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,0.82), rgba(0,0,0,0.18));
+                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+            background-size: 26px 26px;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.22));
         }
 
         .shell {
-            width: min(1440px, calc(100% - 32px));
-            margin: 24px auto 48px;
-            position: relative;
-        }
-
-        .hero {
+            width: min(1500px, calc(100% - 28px));
+            margin: 18px auto 40px;
             display: grid;
-            grid-template-columns: 1.3fr 0.9fr;
-            gap: 20px;
-            margin-bottom: 20px;
+            gap: 18px;
         }
 
-        .hero-card,
+        .hero,
         .panel {
             position: relative;
-            background: var(--panel);
-            border: 1px solid var(--line);
             border-radius: var(--radius-xl);
-            backdrop-filter: blur(20px);
+            border: 1px solid var(--line);
+            background: var(--panel);
+            backdrop-filter: blur(22px);
             box-shadow: var(--shadow);
             overflow: hidden;
         }
 
-        .hero-card::after,
+        .hero::after,
         .panel::after {
             content: "";
             position: absolute;
             inset: 0;
-            background: linear-gradient(140deg, rgba(255,255,255,0.05), transparent 38%, transparent 72%, rgba(255,255,255,0.03));
             pointer-events: none;
+            background: linear-gradient(150deg, rgba(255,255,255,0.06), transparent 32%, transparent 70%, rgba(255,255,255,0.03));
         }
 
-        .hero-main {
-            padding: 28px 28px 24px;
+        .hero {
+            padding: 28px;
+            display: grid;
+            grid-template-columns: 1.25fr 0.95fr;
+            gap: 20px;
         }
 
         .eyebrow {
@@ -97,106 +95,102 @@
             gap: 10px;
             padding: 8px 14px;
             border-radius: 999px;
-            border: 1px solid rgba(239, 179, 102, 0.28);
+            border: 1px solid rgba(95, 180, 255, 0.28);
             color: var(--accent);
-            background: rgba(239, 179, 102, 0.08);
-            font-size: 12px;
+            background: rgba(95, 180, 255, 0.08);
             text-transform: uppercase;
-            letter-spacing: 0.22em;
+            letter-spacing: 0.18em;
+            font-size: 12px;
         }
 
         h1, h2, h3 {
-            font-family: var(--display);
             margin: 0;
-            font-weight: 600;
+            font-family: var(--display);
+            font-weight: 650;
         }
 
         h1 {
             margin-top: 18px;
-            font-size: clamp(42px, 6vw, 82px);
-            line-height: 0.96;
-            max-width: 10ch;
+            font-size: clamp(42px, 5vw, 74px);
+            line-height: 0.95;
+            max-width: 8ch;
         }
 
         .hero-copy {
             margin-top: 16px;
-            max-width: 52ch;
+            max-width: 58ch;
             color: var(--muted);
             line-height: 1.7;
             font-size: 15px;
         }
 
-        .meta-grid {
+        .hero-metrics {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 14px;
             margin-top: 24px;
         }
 
-        .meta-tile {
+        .metric {
             padding: 16px 18px;
             border-radius: var(--radius-md);
-            border: 1px solid rgba(255,255,255,0.06);
             background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.06);
         }
 
-        .meta-label {
-            color: var(--muted);
+        .metric-label {
             font-size: 12px;
-            letter-spacing: 0.12em;
+            color: var(--muted);
+            letter-spacing: 0.14em;
             text-transform: uppercase;
         }
 
-        .meta-value {
+        .metric-value {
             margin-top: 10px;
-            font-size: 26px;
+            font-size: 30px;
             font-family: var(--display);
         }
 
         .hero-side {
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
+            display: grid;
             gap: 16px;
-            background:
-                radial-gradient(circle at top, rgba(239, 179, 102, 0.12), transparent 48%),
-                linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
         }
 
-        .control-card {
-            padding: 16px;
+        .control-box {
+            padding: 18px;
             border-radius: var(--radius-lg);
             background: var(--panel-strong);
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.06);
         }
 
-        .control-card h3 {
-            font-size: 22px;
-            margin-bottom: 8px;
-        }
-
-        .control-card p {
-            margin: 0 0 14px;
+        .control-box p {
+            margin: 8px 0 14px;
             color: var(--muted);
             line-height: 1.6;
             font-size: 14px;
         }
 
-        .control-row {
+        .control-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr auto;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .control-grid-wide {
+            display: grid;
+            grid-template-columns: 1fr auto;
             gap: 10px;
         }
 
         .layout {
             display: grid;
-            grid-template-columns: 1.05fr 0.95fr;
-            gap: 20px;
+            grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+            gap: 18px;
         }
 
         .stack {
             display: grid;
-            gap: 20px;
+            gap: 18px;
         }
 
         .panel {
@@ -212,217 +206,280 @@
         }
 
         .panel-head p {
-            margin: 8px 0 0;
+            margin: 6px 0 0;
             color: var(--muted);
             font-size: 14px;
         }
 
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--success);
-            box-shadow: 0 0 0 8px rgba(159, 203, 139, 0.12);
-        }
-
-        .breakdown-list,
-        .approval-list,
-        .session-list,
-        .timeline-list,
-        .step-list {
-            display: grid;
-            gap: 12px;
-        }
-
-        .bar-row,
-        .approval-card,
-        .session-card,
-        .timeline-card,
-        .step-card {
-            border-radius: var(--radius-md);
-            border: 1px solid rgba(255,255,255,0.06);
-            background: rgba(255,255,255,0.035);
-            padding: 14px 16px;
-        }
-
-        .bar-row {
-            display: grid;
-            grid-template-columns: 110px 1fr 46px;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .bar-track {
-            position: relative;
-            height: 8px;
-            border-radius: 999px;
-            background: rgba(255,255,255,0.07);
-            overflow: hidden;
-        }
-
-        .bar-fill {
-            position: absolute;
-            inset: 0 auto 0 0;
-            width: 40%;
-            border-radius: inherit;
-            background: linear-gradient(90deg, var(--accent), var(--accent-strong));
-        }
-
-        .tag {
+        .status-pill,
+        .mode-pill {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
+            gap: 8px;
+            padding: 7px 12px;
             border-radius: 999px;
-            font-size: 11px;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
             border: 1px solid rgba(255,255,255,0.08);
-            color: var(--muted);
-        }
-
-        .tag.pending { color: var(--warning); border-color: rgba(241, 201, 107, 0.24); }
-        .tag.approved { color: var(--success); border-color: rgba(159, 203, 139, 0.24); }
-        .tag.rejected { color: var(--danger); border-color: rgba(236, 136, 119, 0.24); }
-
-        .approval-top,
-        .session-top,
-        .timeline-top,
-        .step-top {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: start;
-        }
-
-        .approval-title,
-        .session-title,
-        .timeline-title,
-        .step-title {
-            font-size: 18px;
-            font-family: var(--display);
-            margin-bottom: 6px;
-        }
-
-        .mini {
+            background: rgba(255,255,255,0.03);
             color: var(--muted);
             font-size: 12px;
-            line-height: 1.55;
         }
 
-        .mono {
+        .mode-switch {
+            display: inline-flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .execution-meta {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .meta-card {
+            padding: 14px 15px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .meta-card small {
+            display: block;
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.13em;
+        }
+
+        .meta-card strong {
+            display: block;
+            margin-top: 8px;
+            font-size: 16px;
+            font-family: var(--mono);
+            word-break: break-word;
+        }
+
+        .graph-shell {
+            position: relative;
+            min-height: 420px;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255,255,255,0.06);
+            background:
+                radial-gradient(circle at top left, rgba(73, 224, 193, 0.08), transparent 32%),
+                linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0));
+            overflow: auto;
+        }
+
+        .graph-viewport {
+            position: relative;
+            min-width: 100%;
+            min-height: 420px;
+        }
+
+        #dag-edges {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #dag-nodes {
+            position: relative;
+            inset: 0;
+            min-height: 420px;
+        }
+
+        .dag-node {
+            position: absolute;
+            width: 210px;
+            padding: 14px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.07);
+            background: rgba(10, 16, 26, 0.9);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.26);
+        }
+
+        .dag-node::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            border: 1px solid rgba(255,255,255,0.02);
+            pointer-events: none;
+        }
+
+        .dag-node.pending { border-color: rgba(109, 125, 151, 0.45); box-shadow: 0 16px 36px rgba(34, 46, 68, 0.18); }
+        .dag-node.running { border-color: rgba(95, 180, 255, 0.75); box-shadow: 0 0 0 1px rgba(95, 180, 255, 0.18), 0 0 36px rgba(95, 180, 255, 0.22); animation: pulse 1.8s infinite; }
+        .dag-node.waiting_approval { border-color: rgba(243, 200, 104, 0.88); box-shadow: 0 0 0 1px rgba(243, 200, 104, 0.18), 0 0 32px rgba(243, 200, 104, 0.22); animation: blink 1.6s infinite; }
+        .dag-node.succeeded { border-color: rgba(130, 213, 138, 0.78); box-shadow: 0 0 0 1px rgba(130, 213, 138, 0.16), 0 0 30px rgba(130, 213, 138, 0.18); }
+        .dag-node.failed { border-color: rgba(243, 138, 138, 0.82); box-shadow: 0 0 0 1px rgba(243, 138, 138, 0.16), 0 0 30px rgba(243, 138, 138, 0.18); }
+        .dag-node.retrying { border-color: rgba(255, 173, 91, 0.85); box-shadow: 0 0 0 1px rgba(255, 173, 91, 0.18), 0 0 30px rgba(255, 173, 91, 0.2); }
+        .dag-node.cancelled { border-color: rgba(125, 132, 148, 0.62); opacity: 0.76; }
+
+        @keyframes pulse {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+            100% { transform: translateY(0); }
+        }
+
+        @keyframes blink {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.015); }
+        }
+
+        .node-top,
+        .list-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 10px;
+        }
+
+        .node-title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .node-sub {
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--muted);
             font-family: var(--mono);
         }
 
-        .actions {
+        .node-badges,
+        .card-badges {
             display: flex;
-            gap: 8px;
             flex-wrap: wrap;
-            margin-top: 14px;
+            gap: 8px;
+            margin-top: 12px;
         }
 
-        button,
-        input,
-        textarea {
-            font: inherit;
-        }
-
-        button {
-            border: 0;
-            cursor: pointer;
-            transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
-        }
-
-        button:hover {
-            transform: translateY(-1px);
-        }
-
-        .button-primary,
-        .button-secondary,
-        .button-danger {
-            padding: 10px 14px;
+        .badge {
+            padding: 5px 9px;
             border-radius: 999px;
-            font-size: 13px;
+            background: rgba(255,255,255,0.06);
+            color: var(--muted);
+            font-size: 11px;
             letter-spacing: 0.08em;
             text-transform: uppercase;
         }
 
-        .button-primary {
-            color: #2d1808;
-            background: linear-gradient(135deg, #f1c96b, #efb366);
-            box-shadow: 0 12px 30px rgba(239, 179, 102, 0.22);
-        }
-
-        .button-secondary {
+        .node-reason {
+            margin-top: 12px;
             color: var(--text);
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.08);
+            font-size: 13px;
+            line-height: 1.5;
         }
 
-        .button-danger {
-            color: #fff2ef;
-            background: rgba(236, 136, 119, 0.18);
-            border: 1px solid rgba(236, 136, 119, 0.26);
+        .edge-label {
+            fill: var(--muted);
+            font-size: 11px;
+            font-family: var(--mono);
+            text-anchor: middle;
         }
 
-        .form-grid {
+        .event-list,
+        .session-list,
+        .approval-list,
+        .preview-list {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
-            margin-bottom: 14px;
         }
 
-        input,
-        textarea {
-            width: 100%;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.08);
-            color: var(--text);
-            border-radius: 16px;
-            padding: 13px 14px;
-            outline: none;
+        .list-card,
+        .event-card,
+        .preview-card {
+            padding: 14px 15px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.035);
         }
 
-        textarea {
-            min-height: 138px;
-            resize: vertical;
+        .event-card small,
+        .list-card small,
+        .preview-card small {
+            color: var(--muted);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
-        input:focus,
-        textarea:focus {
-            border-color: rgba(239, 179, 102, 0.45);
-            box-shadow: 0 0 0 4px rgba(239, 179, 102, 0.08);
+        .event-card p,
+        .list-card p,
+        .preview-card p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            line-height: 1.55;
+            font-size: 13px;
         }
 
-        .preview-result {
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid rgba(255,255,255,0.08);
-        }
-
-        .timeline-toolbar {
-            display: grid;
-            grid-template-columns: 1fr 1fr auto;
+        .actions,
+        .inline-actions {
+            display: flex;
             gap: 10px;
-            margin-bottom: 14px;
+            flex-wrap: wrap;
         }
 
-        .empty,
-        .loading {
+        button,
+        input {
+            font: inherit;
+        }
+
+        input {
+            width: 100%;
+            padding: 13px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.07);
+            background: rgba(3, 6, 12, 0.64);
+            color: var(--text);
+        }
+
+        button {
+            border: 0;
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-weight: 600;
+            color: #09111d;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+            cursor: pointer;
+            transition: transform 120ms ease, opacity 120ms ease;
+        }
+
+        button:hover { transform: translateY(-1px); }
+        button.secondary {
+            background: rgba(255,255,255,0.06);
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        button.ghost {
+            background: transparent;
+            color: var(--muted);
+            border: 1px dashed rgba(255,255,255,0.12);
+        }
+        button.warn {
+            background: linear-gradient(135deg, #f3c868 0%, #f59e62 100%);
+        }
+        button.danger {
+            background: linear-gradient(135deg, #f38a8a 0%, #dd5f7d 100%);
+        }
+        button.active {
+            box-shadow: 0 0 0 1px rgba(95, 180, 255, 0.24), 0 0 20px rgba(95, 180, 255, 0.16);
+        }
+
+        .empty {
             padding: 18px;
             border-radius: var(--radius-md);
-            border: 1px dashed rgba(255,255,255,0.12);
+            border: 1px dashed rgba(255,255,255,0.1);
             color: var(--muted);
             text-align: center;
         }
 
         .footer-note {
-            margin-top: 24px;
-            color: rgba(247, 239, 226, 0.62);
-            text-align: center;
+            color: var(--muted);
             font-size: 12px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
+            line-height: 1.7;
         }
 
         @media (max-width: 1180px) {
@@ -430,29 +487,32 @@
             .layout {
                 grid-template-columns: 1fr;
             }
+
+            .execution-meta,
+            .hero-metrics {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
 
         @media (max-width: 760px) {
             .shell {
-                width: min(100% - 18px, 100%);
-                margin-top: 12px;
+                width: min(100%, calc(100% - 18px));
             }
 
-            .hero-main,
-            .hero-side,
+            .hero,
             .panel {
                 padding: 18px;
             }
 
-            .meta-grid,
-            .form-grid,
-            .timeline-toolbar,
-            .control-row {
+            .execution-meta,
+            .hero-metrics,
+            .control-grid,
+            .control-grid-wide {
                 grid-template-columns: 1fr;
             }
 
-            .bar-row {
-                grid-template-columns: 1fr;
+            .dag-node {
+                width: 190px;
             }
         }
     </style>
@@ -460,391 +520,720 @@
 <body>
 <div class="shell">
     <section class="hero">
-        <article class="hero-card hero-main">
-            <div class="eyebrow"><span class="status-dot"></span> Dish Agent Mission Control</div>
-            <h1>Control Plane Dashboard</h1>
+        <div>
+            <span class="eyebrow">Execution Mission Control</span>
+            <h1>看见 Agent 系统如何思考、阻塞、恢复与完成。</h1>
             <p class="hero-copy">
-                这是一个面向 AI 微服务系统的运营指挥台。它把 Planner、Policy、Memory 和 Agent 执行平面拉到同一张桌面上，
-                既能讲系统设计，也能现场演示审批闭环、记忆时间线和可解释编排。
+                这里不再只是读 timeline 文本。网关会把真实 `/api/chat/process` 的运行态事件写入 execution runtime store，
+                控制台同时展示 DAG、节点状态流转、审批暂停与恢复，以及完整事件回放。
             </p>
-            <div class="meta-grid">
-                <div class="meta-tile">
-                    <div class="meta-label">Store</div>
-                    <div class="meta-value mono" id="heroStore">STORE_001</div>
+            <div class="hero-metrics">
+                <div class="metric">
+                    <div class="metric-label">活跃会话</div>
+                    <div class="metric-value" id="metric-sessions">0</div>
                 </div>
-                <div class="meta-tile">
-                    <div class="meta-label">Pending</div>
-                    <div class="meta-value" id="heroPending">0</div>
+                <div class="metric">
+                    <div class="metric-label">运行中执行</div>
+                    <div class="metric-value" id="metric-running">0</div>
                 </div>
-                <div class="meta-tile">
-                    <div class="meta-label">Sessions</div>
-                    <div class="meta-value" id="heroSessions">0</div>
+                <div class="metric">
+                    <div class="metric-label">等待审批</div>
+                    <div class="metric-value" id="metric-waiting">0</div>
                 </div>
-            </div>
-        </article>
-
-        <aside class="hero-card hero-side">
-            <div class="control-card">
-                <h3>Control Scope</h3>
-                <p>切换门店上下文后，Dashboard、审批动作、时间线和预览都会自动重载。</p>
-                <div class="control-row">
-                    <input id="storeIdInput" value="STORE_001" placeholder="STORE_001">
-                    <input id="limitInput" value="10" placeholder="10">
-                    <button class="button-primary" id="refreshDashboardBtn">刷新</button>
+                <div class="metric">
+                    <div class="metric-label">记忆条目</div>
+                    <div class="metric-value" id="metric-memory">0</div>
                 </div>
             </div>
-            <div class="control-card">
-                <h3>Live Trace</h3>
-                <p>用于串起 Planner、Policy、Memory 和审批动作，适合联调和演示时说明调用链。</p>
-                <div class="mini mono" id="traceBadge">trace: waiting</div>
+        </div>
+        <div class="hero-side">
+            <div class="control-box">
+                <h3>Store Scope</h3>
+                <p>控制台默认对当前门店工作。切换门店后会刷新 Dashboard、会话列表和审批队列。</p>
+                <div class="control-grid-wide">
+                    <input id="store-id" value="STORE_001" placeholder="STORE_001">
+                    <button id="refresh-dashboard">刷新</button>
+                </div>
             </div>
-        </aside>
+            <div class="control-box">
+                <h3>Plan Studio</h3>
+                <p>用真实网关入口前，先让 planner 输出 DAG 预览，看看编排和策略门禁会如何落图。</p>
+                <div class="control-grid">
+                    <input id="preview-session-id" value="SESSION_DEMO" placeholder="SESSION_DEMO">
+                    <input id="preview-message" value="查询订单123并给出后续建议" placeholder="输入要预览的消息">
+                </div>
+                <div class="actions" style="margin-top: 10px;">
+                    <button id="preview-plan">生成预览</button>
+                    <button class="secondary" id="load-latest-session">打开最新执行</button>
+                </div>
+            </div>
+        </div>
     </section>
 
     <section class="layout">
         <div class="stack">
-            <article class="panel">
+            <section class="panel">
                 <div class="panel-head">
                     <div>
-                        <h2>Control Overview</h2>
-                        <p>从记忆时间线和审批票据中聚合得到当前门店控制面概况。</p>
+                        <h2>Execution Graph Stage</h2>
+                        <p>Planner 生成的 DAG、节点状态、风险标记和执行时延都会在这里实时变化。</p>
                     </div>
-                    <div class="tag mono" id="sourceTag">source: bootstrap</div>
+                    <div class="mode-switch">
+                        <button class="secondary active" id="mode-live">实时模式</button>
+                        <button class="secondary" id="mode-replay">历史回放</button>
+                    </div>
                 </div>
-                <div class="breakdown-list" id="breakdownList">
-                    <div class="loading">加载控制面统计中…</div>
+                <div class="execution-meta" id="execution-meta"></div>
+                <div class="graph-shell">
+                    <div class="graph-viewport" id="graph-viewport">
+                        <svg id="dag-edges"></svg>
+                        <div id="dag-nodes"></div>
+                    </div>
                 </div>
-            </article>
+                <div class="footer-note" id="graph-note" style="margin-top: 14px;">
+                    打开活跃会话或执行预览后，这里会展示当前 execution 的完整运行态。
+                </div>
+            </section>
 
-            <article class="panel">
+            <section class="panel">
                 <div class="panel-head">
                     <div>
-                        <h2>Plan Preview Studio</h2>
-                        <p>输入一条复杂请求，实时查看执行步骤、策略决策、记忆命中和审批要求。</p>
+                        <h2>Replay Console</h2>
+                        <p>历史回放和实时流复用同一事件模型，支持暂停、倍速和重置。</p>
                     </div>
+                    <span class="mode-pill" id="replay-status">未加载</span>
                 </div>
-                <div class="form-grid">
-                    <input id="previewSessionId" value="SESSION_DEMO" placeholder="Session ID">
-                    <input id="previewStoreId" value="STORE_001" placeholder="Store ID">
-                </div>
-                <textarea id="previewMessage">帮我查一下订单12345，并给出处理建议，如果涉及退款请判断是否需要人工审批。</textarea>
                 <div class="actions">
-                    <button class="button-primary" id="runPreviewBtn">运行预览</button>
+                    <button class="secondary" id="replay-play">播放</button>
+                    <button class="secondary" id="replay-pause">暂停</button>
+                    <button class="secondary" id="replay-reset">重置</button>
+                    <button class="ghost speed-btn active" data-speed="1600">1x</button>
+                    <button class="ghost speed-btn" data-speed="850">2x</button>
+                    <button class="ghost speed-btn" data-speed="350">4x</button>
                 </div>
-                <div class="preview-result" id="previewResult">
-                    <div class="empty">还没有预览结果。</div>
-                </div>
-            </article>
+                <div class="preview-list" id="preview-list" style="margin-top: 16px;"></div>
+            </section>
         </div>
 
         <div class="stack">
-            <article class="panel">
+            <section class="panel">
                 <div class="panel-head">
                     <div>
-                        <h2>Approval Queue</h2>
-                        <p>审批通过/拒绝直接走控制面闭环，适合演示高风险动作的人机协作。</p>
+                        <h2>Live Event Rail</h2>
+                        <p>每次状态切换都会落成稳定 JSON 事件，并同步广播到这里。</p>
                     </div>
+                    <span class="status-pill" id="stream-state">未连接</span>
                 </div>
-                <div class="approval-list" id="approvalList">
-                    <div class="loading">加载审批队列中…</div>
-                </div>
-            </article>
+                <div class="event-list" id="event-list"></div>
+            </section>
 
-            <article class="panel">
+            <section class="panel">
                 <div class="panel-head">
                     <div>
                         <h2>Active Sessions</h2>
-                        <p>当前门店最近活跃会话和它们最后一条控制面事件。</p>
+                        <p>一键打开最近执行，自动决定进入实时模式还是回放模式。</p>
                     </div>
                 </div>
-                <div class="session-list" id="sessionList">
-                    <div class="loading">加载活跃会话中…</div>
-                </div>
-            </article>
+                <div class="session-list" id="session-list"></div>
+            </section>
 
-            <article class="panel">
+            <section class="panel">
                 <div class="panel-head">
                     <div>
-                        <h2>Memory Timeline Inspector</h2>
-                        <p>按 session 查看记忆时间线，验证执行摘要、审批状态和 trace 是否落库。</p>
+                        <h2>Approval Queue</h2>
+                        <p>等待人工门禁的 execution 会在这里阻塞，批准后会继续推进后续节点。</p>
                     </div>
                 </div>
-                <div class="timeline-toolbar">
-                    <input id="timelineSessionId" placeholder="SESSION_DEMO">
-                    <input id="timelineType" placeholder="approval_ticket / execution_summary">
-                    <button class="button-secondary" id="loadTimelineBtn">查询</button>
-                </div>
-                <div class="timeline-list" id="timelineList">
-                    <div class="empty">输入 sessionId 后查看时间线。</div>
-                </div>
-            </article>
+                <div class="approval-list" id="approval-list"></div>
+            </section>
         </div>
     </section>
-
-    <div class="footer-note">Planner / Policy / Memory / Approval / Agent Execution Plane</div>
 </div>
 
 <script>
     const state = {
-        storeId: 'STORE_001',
-        limit: 10,
-        traceId: null,
-        overview: null
+        storeId: "STORE_001",
+        selectedSessionId: "SESSION_DEMO",
+        selectedExecutionId: null,
+        graph: null,
+        replay: null,
+        displayedEvents: [],
+        replayTimer: null,
+        replaySpeed: 1600,
+        replayIndex: 0,
+        mode: "live",
+        stream: null,
+        planPreview: null
     };
 
-    const el = (id) => document.getElementById(id);
+    const nodesEl = document.getElementById("dag-nodes");
+    const edgesEl = document.getElementById("dag-edges");
+    const viewportEl = document.getElementById("graph-viewport");
+    const eventListEl = document.getElementById("event-list");
+    const sessionListEl = document.getElementById("session-list");
+    const approvalListEl = document.getElementById("approval-list");
+    const previewListEl = document.getElementById("preview-list");
+    const executionMetaEl = document.getElementById("execution-meta");
+    const graphNoteEl = document.getElementById("graph-note");
+    const streamStateEl = document.getElementById("stream-state");
+    const replayStatusEl = document.getElementById("replay-status");
 
-    function nextTrace(prefix = 'TRC-UI') {
-        return `${prefix}-${Math.random().toString(16).slice(2, 10).toUpperCase()}`;
-    }
+    document.getElementById("store-id").addEventListener("change", (event) => {
+        state.storeId = event.target.value || "STORE_001";
+    });
+    document.getElementById("refresh-dashboard").addEventListener("click", refreshDashboard);
+    document.getElementById("preview-plan").addEventListener("click", previewPlan);
+    document.getElementById("load-latest-session").addEventListener("click", () => openLatestExecution(document.getElementById("preview-session-id").value));
+    document.getElementById("mode-live").addEventListener("click", () => {
+        setMode("live");
+        if (state.selectedExecutionId) {
+            openExecution(state.selectedExecutionId, "live");
+        }
+    });
+    document.getElementById("mode-replay").addEventListener("click", () => {
+        setMode("replay");
+        startReplay();
+    });
+    document.getElementById("replay-play").addEventListener("click", startReplay);
+    document.getElementById("replay-pause").addEventListener("click", pauseReplay);
+    document.getElementById("replay-reset").addEventListener("click", resetReplay);
+    document.querySelectorAll(".speed-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.replaySpeed = Number(button.dataset.speed);
+            document.querySelectorAll(".speed-btn").forEach((item) => item.classList.remove("active"));
+            button.classList.add("active");
+            if (state.replayTimer) {
+                pauseReplay();
+                startReplay();
+            }
+        });
+    });
 
-    function setTrace(traceId) {
-        state.traceId = traceId;
-        el('traceBadge').textContent = `trace: ${traceId}`;
-    }
-
-    function headers() {
-        return {
-            'Content-Type': 'application/json',
-            'X-Store-Id': state.storeId,
-            'X-Trace-Id': state.traceId || nextTrace()
-        };
-    }
-
-    function escapeHtml(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    async function fetchJson(url, options = {}) {
-        const response = await fetch(url, options);
+    async function api(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        headers.set("X-Store-Id", state.storeId || "STORE_001");
+        if (options.body && !headers.has("Content-Type")) {
+            headers.set("Content-Type", "application/json");
+        }
+        const response = await fetch(path, { ...options, headers });
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || `HTTP ${response.status}`);
+            throw new Error("HTTP " + response.status);
         }
         return response.json();
     }
 
-    function renderBreakdown(overview) {
-        const breakdown = overview.memoryTypeBreakdown || {};
-        const total = Object.values(breakdown).reduce((sum, current) => sum + current, 0) || 1;
-        const rows = Object.entries(breakdown).length
-            ? Object.entries(breakdown).map(([key, value]) => `
-                <div class="bar-row">
-                    <div class="mono">${escapeHtml(key)}</div>
-                    <div class="bar-track"><div class="bar-fill" style="width:${Math.max((value / total) * 100, 8)}%"></div></div>
-                    <div class="mono">${value}</div>
-                </div>
-            `).join('')
-            : '<div class="empty">当前门店还没有控制面事件。</div>';
-        el('breakdownList').innerHTML = rows;
-        el('sourceTag').textContent = `entries: ${overview.totalMemoryEntries}`;
+    function setMode(mode) {
+        state.mode = mode;
+        document.getElementById("mode-live").classList.toggle("active", mode === "live");
+        document.getElementById("mode-replay").classList.toggle("active", mode === "replay");
+        replayStatusEl.textContent = mode === "live" ? "实时订阅" : "历史回放";
     }
 
-    function approvalTag(status) {
-        const lower = String(status || '').toLowerCase();
-        return `tag ${lower}`;
-    }
-
-    function renderApprovals(overview) {
-        const approvals = overview.recentApprovals || [];
-        if (!approvals.length) {
-            el('approvalList').innerHTML = '<div class="empty">暂无审批票据。</div>';
-            return;
-        }
-
-        el('approvalList').innerHTML = approvals.map(item => `
-            <div class="approval-card">
-                <div class="approval-top">
-                    <div>
-                        <div class="approval-title mono">${escapeHtml(item.approvalId)}</div>
-                        <div class="mini">session: <span class="mono">${escapeHtml(item.sessionId)}</span> · agent: ${escapeHtml(item.targetAgent || 'n/a')}</div>
-                    </div>
-                    <span class="${approvalTag(item.status)}">${escapeHtml(item.status)}</span>
-                </div>
-                <div class="mini" style="margin-top:10px;">
-                    requestedBy: ${escapeHtml(item.requestedBy || 'gateway')}<br>
-                    createdAt: ${escapeHtml(item.createdAt || '-')}<br>
-                    decidedBy: ${escapeHtml(item.decidedBy || '-')}
-                </div>
-                <div class="actions">
-                    <button class="button-primary" onclick="approveTicket('${escapeHtml(item.sessionId)}','${escapeHtml(item.approvalId)}')">批准</button>
-                    <button class="button-danger" onclick="rejectTicket('${escapeHtml(item.sessionId)}','${escapeHtml(item.approvalId)}')">拒绝</button>
-                    <button class="button-secondary" onclick="inspectTimeline('${escapeHtml(item.sessionId)}','approval_ticket')">查看时间线</button>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    function renderSessions(overview) {
-        const sessions = overview.activeSessions || [];
-        if (!sessions.length) {
-            el('sessionList').innerHTML = '<div class="empty">暂无活跃会话。</div>';
-            return;
-        }
-        el('sessionList').innerHTML = sessions.map(item => `
-            <div class="session-card">
-                <div class="session-top">
-                    <div>
-                        <div class="session-title mono">${escapeHtml(item.sessionId)}</div>
-                        <div class="mini">last type: ${escapeHtml(item.lastMemoryType)} · events: ${escapeHtml(item.eventCount)}</div>
-                    </div>
-                    <button class="button-secondary" onclick="inspectTimeline('${escapeHtml(item.sessionId)}','')">打开</button>
-                </div>
-                <div class="mini" style="margin-top:10px;">trace: <span class="mono">${escapeHtml(item.lastTraceId || '-')}</span><br>updated: ${escapeHtml(item.lastUpdatedAt || '-')}</div>
-            </div>
-        `).join('');
+    async function refreshDashboard() {
+        state.storeId = document.getElementById("store-id").value || "STORE_001";
+        const overview = await api(`/api/control/dashboard/overview?limit=8`);
+        renderOverview(overview);
     }
 
     function renderOverview(overview) {
-        state.overview = overview;
-        el('heroStore').textContent = overview.storeId || state.storeId;
-        el('heroPending').textContent = overview.pendingApprovalCount ?? 0;
-        el('heroSessions').textContent = overview.totalSessions ?? 0;
-        renderBreakdown(overview);
-        renderApprovals(overview);
-        renderSessions(overview);
+        document.getElementById("metric-sessions").textContent = overview.totalSessions ?? 0;
+        document.getElementById("metric-running").textContent = overview.runningExecutionCount ?? 0;
+        document.getElementById("metric-waiting").textContent = overview.waitingApprovalExecutionCount ?? 0;
+        document.getElementById("metric-memory").textContent = overview.totalMemoryEntries ?? 0;
+
+        renderSessions(overview.activeSessions || []);
+        renderApprovals(overview.recentApprovals || []);
     }
 
-    async function loadOverview() {
-        state.storeId = el('storeIdInput').value.trim() || 'STORE_001';
-        state.limit = Number(el('limitInput').value || 10);
-        el('previewStoreId').value = state.storeId;
-        setTrace(nextTrace());
-        const data = await fetchJson(`/api/control/dashboard/overview?limit=${state.limit}`, {
-            headers: headers()
-        });
-        renderOverview(data);
-    }
-
-    function renderPreview(data) {
-        const steps = data.steps?.length ? data.steps.map(step => `
-            <div class="step-card">
-                <div class="step-top">
+    function renderSessions(items) {
+        if (!items.length) {
+            sessionListEl.innerHTML = `<div class="empty">当前门店还没有活跃会话。</div>`;
+            return;
+        }
+        sessionListEl.innerHTML = items.map((item) => `
+            <article class="list-card">
+                <div class="list-item-top">
                     <div>
-                        <div class="step-title mono">${escapeHtml(step.stepId)} → ${escapeHtml(step.targetAgent)}</div>
-                        <div class="mini">policy: ${escapeHtml(step.policyDecision)} · risk: ${escapeHtml(step.riskLevel)} · dependsOn: ${(step.dependsOn || []).join(', ') || 'none'}</div>
+                        <small>Session</small>
+                        <div class="node-title">${escapeHtml(item.sessionId)}</div>
                     </div>
-                    <span class="${approvalTag(step.policyDecision === 'REQUIRE_APPROVAL' ? 'pending' : step.policyDecision === 'DENY' ? 'rejected' : 'approved')}">${escapeHtml(step.policyDecision)}</span>
+                    <span class="badge">${escapeHtml(item.latestExecutionStatus || "NO_EXECUTION")}</span>
                 </div>
-                <div class="mini" style="margin-top:10px;">${escapeHtml(step.reason)}</div>
-            </div>
-        `).join('') : '<div class="empty">未生成任何执行步骤。</div>';
-
-        el('previewResult').innerHTML = `
-            <div class="mini" style="margin-bottom:14px;">
-                trace: <span class="mono">${escapeHtml(data.traceId)}</span><br>
-                planId: <span class="mono">${escapeHtml(data.planId)}</span><br>
-                intent: ${escapeHtml(data.intent)} · mode: ${escapeHtml(data.executionMode)} · confidence: ${escapeHtml(data.routingConfidence)}
-            </div>
-            <div class="mini" style="margin-bottom:14px;">
-                memoryHit: ${data.memoryHit ? 'yes' : 'no'} · approvalRequired: ${escapeHtml(data.approvalRequiredCount)} · blocked: ${escapeHtml(data.blockedStepCount)}
-            </div>
-            <div class="step-list">${steps}</div>
-        `;
+                <div class="card-badges">
+                    <span class="badge">Memory ${escapeHtml(item.lastMemoryType || "unknown")}</span>
+                    <span class="badge">Events ${item.eventCount ?? 0}</span>
+                    <span class="badge">Execution ${escapeHtml(item.latestExecutionId || "pending")}</span>
+                </div>
+                <p>最近更新时间 ${formatInstant(item.lastUpdatedAt)}，trace ${escapeHtml(item.lastTraceId || "-")}。</p>
+                <div class="inline-actions" style="margin-top: 12px;">
+                    <button class="secondary" onclick="openLatestExecution('${escapeAttr(item.sessionId)}')">Open DAG</button>
+                    <button class="ghost" onclick="document.getElementById('preview-session-id').value='${escapeAttr(item.sessionId)}'">Use Session</button>
+                </div>
+            </article>
+        `).join("");
     }
 
-    async function runPreview() {
-        setTrace(nextTrace('TRC-PREVIEW'));
-        const payload = {
-            message: el('previewMessage').value,
-            sessionId: el('previewSessionId').value,
-            storeId: el('previewStoreId').value
-        };
-        const data = await fetchJson('/api/control/plan-preview', {
-            method: 'POST',
-            headers: headers(),
-            body: JSON.stringify(payload)
-        });
-        renderPreview(data);
-    }
-
-    function renderTimeline(entries) {
-        if (!entries.length) {
-            el('timelineList').innerHTML = '<div class="empty">这个 session 当前没有符合条件的时间线事件。</div>';
+    function renderApprovals(items) {
+        if (!items.length) {
+            approvalListEl.innerHTML = `<div class="empty">审批队列为空，当前没有待人工处理的票据。</div>`;
             return;
         }
-        el('timelineList').innerHTML = entries.map(item => `
-            <div class="timeline-card">
-                <div class="timeline-top">
+        approvalListEl.innerHTML = items.map((item) => `
+            <article class="list-card">
+                <div class="list-item-top">
                     <div>
-                        <div class="timeline-title">${escapeHtml(item.memoryType)}</div>
-                        <div class="mini">trace: <span class="mono">${escapeHtml(item.traceId || '-')}</span> · seq: ${escapeHtml(item.sequence)}</div>
+                        <small>Approval</small>
+                        <div class="node-title">${escapeHtml(item.approvalId)}</div>
                     </div>
-                    <span class="tag">${escapeHtml(item.createdAt || '-')}</span>
+                    <span class="badge">${escapeHtml(item.status)}</span>
                 </div>
-                <div class="mini" style="margin-top:10px; white-space:pre-wrap;">${escapeHtml(item.content)}</div>
-            </div>
-        `).join('');
-    }
-
-    async function inspectTimeline(sessionId, memoryType = '') {
-        if (!sessionId) {
-            return;
-        }
-        el('timelineSessionId').value = sessionId;
-        el('timelineType').value = memoryType;
-        setTrace(nextTrace('TRC-TL'));
-        const params = new URLSearchParams({ limit: String(state.limit || 10) });
-        if (memoryType) {
-            params.set('memoryType', memoryType);
-        }
-        const data = await fetchJson(`/api/control/sessions/${encodeURIComponent(sessionId)}/memory?${params.toString()}`, {
-            headers: headers()
-        });
-        renderTimeline(data.entries || []);
-    }
-
-    async function approvalDecision(sessionId, approvalId, action) {
-        const decisionReason = window.prompt(`请输入 ${approvalId} 的${action === 'approve' ? '通过' : '拒绝'}原因`, action === 'approve' ? '人工审核通过' : '命中风控规则');
-        if (decisionReason === null) {
-            return;
-        }
-        const decidedBy = window.prompt('请输入审批人', 'ops-user');
-        if (decidedBy === null) {
-            return;
-        }
-        setTrace(nextTrace('TRC-APR'));
-        await fetchJson(`/api/control/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(approvalId)}/${action}`, {
-            method: 'POST',
-            headers: headers(),
-            body: JSON.stringify({ decidedBy, decisionReason })
-        });
-        await loadOverview();
-        await inspectTimeline(sessionId, 'approval_ticket');
+                <div class="card-badges">
+                    <span class="badge">${escapeHtml(item.sessionId || "no-session")}</span>
+                    <span class="badge">${escapeHtml(item.targetAgent || "unknown-agent")}</span>
+                </div>
+                <p>创建于 ${formatInstant(item.createdAt)}，请求人 ${escapeHtml(item.requestedBy || "gateway")}。</p>
+                <div class="inline-actions" style="margin-top: 12px;">
+                    <button class="warn" onclick="approveTicket('${escapeAttr(item.sessionId || "")}', '${escapeAttr(item.approvalId)}')">批准并恢复</button>
+                    <button class="danger" onclick="rejectTicket('${escapeAttr(item.sessionId || "")}', '${escapeAttr(item.approvalId)}')">拒绝并终止</button>
+                </div>
+            </article>
+        `).join("");
     }
 
     async function approveTicket(sessionId, approvalId) {
-        await approvalDecision(sessionId, approvalId, 'approve');
+        const reason = window.prompt("请输入批准原因", "人工审核通过");
+        if (reason === null) return;
+        await api(`/api/control/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(approvalId)}/approve`, {
+            method: "POST",
+            body: JSON.stringify({ decidedBy: "dashboard-user", decisionReason: reason })
+        });
+        await refreshDashboard();
+        if (state.selectedSessionId === sessionId) {
+            await openLatestExecution(sessionId);
+        }
     }
 
     async function rejectTicket(sessionId, approvalId) {
-        await approvalDecision(sessionId, approvalId, 'reject');
+        const reason = window.prompt("请输入拒绝原因", "人工审批拒绝");
+        if (reason === null) return;
+        await api(`/api/control/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(approvalId)}/reject`, {
+            method: "POST",
+            body: JSON.stringify({ decidedBy: "dashboard-user", decisionReason: reason })
+        });
+        await refreshDashboard();
+        if (state.selectedSessionId === sessionId) {
+            await openLatestExecution(sessionId);
+        }
     }
 
-    async function loadTimelineFromToolbar() {
-        const sessionId = el('timelineSessionId').value.trim();
-        const memoryType = el('timelineType').value.trim();
-        await inspectTimeline(sessionId, memoryType);
+    async function previewPlan() {
+        const sessionId = document.getElementById("preview-session-id").value || "SESSION_DEMO";
+        const message = document.getElementById("preview-message").value || "查询订单123并给出后续建议";
+        state.selectedSessionId = sessionId;
+        const preview = await api("/api/control/plan-preview", {
+            method: "POST",
+            body: JSON.stringify({ sessionId, storeId: state.storeId, message })
+        });
+        state.planPreview = preview;
+        state.selectedExecutionId = null;
+        disconnectStream();
+        setMode("replay");
+        renderPreview(preview);
     }
 
-    el('refreshDashboardBtn').addEventListener('click', () => loadOverview().catch(showError));
-    el('runPreviewBtn').addEventListener('click', () => runPreview().catch(showError));
-    el('loadTimelineBtn').addEventListener('click', () => loadTimelineFromToolbar().catch(showError));
+    function renderPreview(preview) {
+        const previewGraph = {
+            executionId: "plan-preview",
+            planId: preview.planId,
+            sessionId: preview.sessionId,
+            storeId: preview.storeId,
+            traceId: preview.traceId,
+            intent: preview.intent,
+            executionMode: preview.executionMode,
+            overallStatus: "PENDING",
+            startedAt: null,
+            finishedAt: null,
+            durationMs: 0,
+            nodes: preview.graphNodes || [],
+            edges: preview.graphEdges || [],
+            metadata: { preview: true },
+            totalEvents: 0
+        };
+        state.graph = previewGraph;
+        state.replay = null;
+        state.displayedEvents = [];
+        renderExecutionMeta(previewGraph, "Preview");
+        renderGraph(previewGraph);
+        renderEventRail([]);
+        previewListEl.innerHTML = (preview.steps || []).map((step) => `
+            <article class="preview-card">
+                <small>Step ${step.stepIndex} / ${step.totalSteps}</small>
+                <div class="node-title">${escapeHtml(step.targetAgent)}</div>
+                <div class="card-badges">
+                    <span class="badge">${escapeHtml(step.policyDecision)}</span>
+                    <span class="badge">${step.executable ? "EXECUTABLE" : "BLOCKED"}</span>
+                </div>
+                <p>${escapeHtml(step.reason || "planner step")}</p>
+            </article>
+        `).join("") || `<div class="empty">预览中没有生成可执行步骤。</div>`;
+        graphNoteEl.textContent = "当前显示的是 planner preview DAG，不会真实执行 agent。";
+    }
 
-    function showError(error) {
+    async function openLatestExecution(sessionId) {
+        if (!sessionId) return;
+        state.selectedSessionId = sessionId;
+        document.getElementById("preview-session-id").value = sessionId;
+        const graph = await api(`/api/control/sessions/${encodeURIComponent(sessionId)}/executions/latest`);
+        if (!graph) {
+            graphNoteEl.textContent = "该 session 还没有 execution runtime 快照。";
+            return;
+        }
+        await openExecution(graph.executionId, isTerminal(graph.overallStatus) ? "replay" : "live", graph);
+    }
+
+    async function openExecution(executionId, preferredMode = "live", prefetchedGraph = null) {
+        if (!executionId) return;
+        state.selectedExecutionId = executionId;
+        const graph = prefetchedGraph || await api(`/api/control/executions/${encodeURIComponent(executionId)}`);
+        state.graph = graph;
+        renderExecutionMeta(graph, preferredMode === "live" ? "Live" : "Replay");
+        renderGraph(graph);
+        const replay = await api(`/api/control/executions/${encodeURIComponent(executionId)}/replay`);
+        state.replay = replay;
+        state.displayedEvents = replay?.events?.slice(-20) || [];
+        renderEventRail(state.displayedEvents);
+        previewListEl.innerHTML = replay?.events?.length
+            ? replay.events.slice(-6).reverse().map((item) => renderPreviewEvent(item)).join("")
+            : `<div class="empty">当前 execution 还没有事件可回放。</div>`;
+        graphNoteEl.textContent = preferredMode === "live"
+            ? "当前 execution 已连接实时 SSE，后续节点状态会直接在 DAG 上流动。"
+            : "当前 execution 已切到历史回放模式，可以按节点顺序重放状态流转。";
+
+        if (preferredMode === "live" && !isTerminal(graph.overallStatus)) {
+            setMode("live");
+            connectStream(executionId);
+        } else {
+            setMode("replay");
+            disconnectStream();
+            resetReplay();
+        }
+    }
+
+    function renderExecutionMeta(graph, surfaceMode) {
+        const rows = [
+            ["Execution", graph.executionId || "-"],
+            ["Plan", graph.planId || "-"],
+            ["Trace", graph.traceId || "-"],
+            ["Mode", `${graph.executionMode || "-"} / ${surfaceMode}`],
+            ["Overall", graph.overallStatus || "PENDING"],
+            ["Duration", formatDuration(graph.durationMs)]
+        ];
+        executionMetaEl.innerHTML = rows.map(([label, value]) => `
+            <article class="meta-card">
+                <small>${escapeHtml(label)}</small>
+                <strong>${escapeHtml(String(value))}</strong>
+            </article>
+        `).join("");
+    }
+
+    function renderGraph(graph) {
+        const nodes = sortNodes(graph.nodes || []);
+        if (!nodes.length) {
+            nodesEl.innerHTML = `<div class="empty" style="position:absolute; inset: 26px;">暂无可展示的 DAG 节点。</div>`;
+            edgesEl.innerHTML = "";
+            return;
+        }
+
+        const positions = new Map();
+        const baseX = 48;
+        const baseY = 46;
+        const gapX = 250;
+        const gapY = 150;
+        const groups = new Map();
+
+        nodes.forEach((node, index) => {
+            const stepIndex = Number(node.metadata?.stepIndex || (index + 1));
+            const bucket = groups.get(stepIndex) || 0;
+            groups.set(stepIndex, bucket + 1);
+            positions.set(node.nodeId, {
+                x: baseX + (stepIndex - 1) * gapX,
+                y: baseY + bucket * gapY
+            });
+        });
+
+        const maxX = Math.max(...Array.from(positions.values()).map((item) => item.x)) + 280;
+        const maxY = Math.max(...Array.from(positions.values()).map((item) => item.y)) + 180;
+        viewportEl.style.width = `${Math.max(maxX, viewportEl.parentElement.clientWidth - 2)}px`;
+        viewportEl.style.minHeight = `${Math.max(maxY, 420)}px`;
+        nodesEl.style.minHeight = `${Math.max(maxY, 420)}px`;
+        edgesEl.setAttribute("viewBox", `0 0 ${Math.max(maxX, 960)} ${Math.max(maxY, 420)}`);
+
+        edgesEl.innerHTML = (graph.edges || []).map((edge) => {
+            const from = positions.get(edge.fromNodeId);
+            const to = positions.get(edge.toNodeId);
+            if (!from || !to) return "";
+            const x1 = from.x + 210;
+            const y1 = from.y + 62;
+            const x2 = to.x;
+            const y2 = to.y + 62;
+            const midX = (x1 + x2) / 2;
+            const curve = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+            return `
+                <path d="${curve}" fill="none" stroke="rgba(95,180,255,0.32)" stroke-width="2.2" stroke-dasharray="${edge.condition === "ON_APPROVAL" ? "6 6" : "0"}"></path>
+                <text class="edge-label" x="${midX}" y="${Math.min(y1, y2) - 8}">${escapeHtml(edge.condition || "ON_SUCCESS")}</text>
+            `;
+        }).join("");
+
+        nodesEl.innerHTML = nodes.map((node) => {
+            const position = positions.get(node.nodeId);
+            const statusClass = String(node.status || "PENDING").toLowerCase();
+            return `
+                <article class="dag-node ${statusClass}" style="left:${position.x}px; top:${position.y}px;">
+                    <div class="node-top">
+                        <div>
+                            <div class="node-title">${escapeHtml(node.targetAgent || node.nodeId)}</div>
+                            <div class="node-sub">${escapeHtml(node.nodeId)}</div>
+                        </div>
+                        <span class="badge">${escapeHtml(node.status || "PENDING")}</span>
+                    </div>
+                    <div class="node-badges">
+                        <span class="badge">${escapeHtml(node.nodeType || "AGENT_CALL")}</span>
+                        <span class="badge">Latency ${formatDuration(node.latencyMs)}</span>
+                        <span class="badge">Risk ${escapeHtml(node.riskLevel || "normal")}</span>
+                    </div>
+                    <div class="node-reason">${escapeHtml(node.statusReason || "waiting for runtime event")}</div>
+                    ${node.approvalId ? `<div class="node-sub" style="margin-top:10px;">approval ${escapeHtml(node.approvalId)}</div>` : ""}
+                </article>
+            `;
+        }).join("");
+    }
+
+    function renderEventRail(events) {
+        if (!events.length) {
+            eventListEl.innerHTML = `<div class="empty">还没有接收到 execution event。</div>`;
+            return;
+        }
+        eventListEl.innerHTML = events.slice().reverse().map((item) => `
+            <article class="event-card">
+                <div class="list-item-top">
+                    <div>
+                        <small>${escapeHtml(item.nodeId || "__execution__")}</small>
+                        <div class="node-title">${escapeHtml(item.status || "PENDING")}</div>
+                    </div>
+                    <span class="badge">${formatInstant(item.occurredAt)}</span>
+                </div>
+                <div class="card-badges">
+                    <span class="badge">${escapeHtml(item.executionId || "-")}</span>
+                    <span class="badge">${escapeHtml(item.metadata?.targetAgent || item.metadata?.intent || "control-plane")}</span>
+                    <span class="badge">Latency ${formatDuration(item.metadata?.latencyMs)}</span>
+                </div>
+                <p>${escapeHtml(item.metadata?.statusReason || item.payload?.responseSummary || "execution event")}</p>
+            </article>
+        `).join("");
+    }
+
+    function renderPreviewEvent(item) {
+        return `
+            <article class="preview-card">
+                <small>${formatInstant(item.occurredAt)}</small>
+                <div class="node-title">${escapeHtml(item.nodeId || "__execution__")} -> ${escapeHtml(item.status)}</div>
+                <p>${escapeHtml(item.metadata?.statusReason || item.payload?.responseSummary || "event recorded")}</p>
+            </article>
+        `;
+    }
+
+    function connectStream(executionId) {
+        disconnectStream();
+        streamStateEl.textContent = "连接中";
+        state.stream = new EventSource(`/api/control/executions/${encodeURIComponent(executionId)}/stream`);
+        state.stream.addEventListener("connected", () => {
+            streamStateEl.textContent = "SSE 已连接";
+        });
+        state.stream.addEventListener("execution-event", (event) => {
+            const item = JSON.parse(event.data);
+            state.displayedEvents = [...state.displayedEvents, item].slice(-40);
+            renderEventRail(state.displayedEvents);
+            previewListEl.innerHTML = state.displayedEvents.slice(-6).reverse().map((entry) => renderPreviewEvent(entry)).join("");
+            state.graph = applyEventToGraph(state.graph, item);
+            renderExecutionMeta(state.graph, "Live");
+            renderGraph(state.graph);
+            if (isTerminal(state.graph.overallStatus)) {
+                streamStateEl.textContent = "执行完成";
+                disconnectStream();
+            }
+        });
+        state.stream.onerror = () => {
+            streamStateEl.textContent = "流已断开";
+        };
+    }
+
+    function disconnectStream() {
+        if (state.stream) {
+            state.stream.close();
+            state.stream = null;
+        }
+    }
+
+    function startReplay() {
+        if (!state.replay || !state.replay.events || !state.replay.events.length || !state.graph) {
+            replayStatusEl.textContent = "暂无回放";
+            return;
+        }
+        setMode("replay");
+        disconnectStream();
+        if (state.replayIndex === 0) {
+            state.graph = buildReplayBaseline(state.graph);
+            state.displayedEvents = [];
+            renderGraph(state.graph);
+            renderEventRail([]);
+        }
+        replayStatusEl.textContent = `回放中 (${state.replayIndex}/${state.replay.events.length})`;
+        pauseReplay();
+        state.replayTimer = window.setInterval(() => {
+            if (state.replayIndex >= state.replay.events.length) {
+                pauseReplay();
+                replayStatusEl.textContent = "回放完成";
+                return;
+            }
+            const item = state.replay.events[state.replayIndex++];
+            state.graph = applyEventToGraph(state.graph, item);
+            state.displayedEvents = [...state.displayedEvents, item].slice(-40);
+            renderGraph(state.graph);
+            renderEventRail(state.displayedEvents);
+            renderExecutionMeta(state.graph, "Replay");
+            replayStatusEl.textContent = `回放中 (${state.replayIndex}/${state.replay.events.length})`;
+        }, state.replaySpeed);
+    }
+
+    function pauseReplay() {
+        if (state.replayTimer) {
+            window.clearInterval(state.replayTimer);
+            state.replayTimer = null;
+        }
+    }
+
+    function resetReplay() {
+        pauseReplay();
+        state.replayIndex = 0;
+        if (state.graph) {
+            state.graph = buildReplayBaseline(state.graph);
+            renderGraph(state.graph);
+        }
+        state.displayedEvents = [];
+        renderEventRail([]);
+        replayStatusEl.textContent = "已重置";
+    }
+
+    function buildReplayBaseline(graph) {
+        return {
+            ...graph,
+            overallStatus: "PENDING",
+            finishedAt: null,
+            durationMs: 0,
+            totalEvents: 0,
+            nodes: (graph.nodes || []).map((node) => ({
+                ...node,
+                status: "PENDING",
+                latencyMs: 0,
+                statusReason: "planned",
+                updatedAt: null,
+                approvalId: null
+            }))
+        };
+    }
+
+    function applyEventToGraph(graph, item) {
+        if (!graph) return graph;
+        const next = {
+            ...graph,
+            totalEvents: (graph.totalEvents || 0) + 1,
+            nodes: (graph.nodes || []).map((node) => {
+                if (node.nodeId !== item.nodeId) return node;
+                return {
+                    ...node,
+                    status: item.status,
+                    latencyMs: Number(item.metadata?.latencyMs || node.latencyMs || 0),
+                    statusReason: item.metadata?.statusReason || item.payload?.responseSummary || node.statusReason,
+                    approvalId: item.metadata?.approvalId || node.approvalId || null,
+                    updatedAt: item.occurredAt,
+                    riskLevel: item.metadata?.riskLevel || node.riskLevel
+                };
+            })
+        };
+        next.durationMs = durationFrom(next.startedAt, item.occurredAt);
+        if (item.nodeId === "__execution__") {
+            next.overallStatus = item.status;
+            if (isTerminal(item.status)) {
+                next.finishedAt = item.occurredAt;
+            }
+            return next;
+        }
+        next.overallStatus = inferOverall(next.nodes);
+        if (isTerminal(next.overallStatus)) {
+            next.finishedAt = item.occurredAt;
+        }
+        return next;
+    }
+
+    function inferOverall(nodes) {
+        if (nodes.some((node) => node.status === "FAILED")) return "FAILED";
+        if (nodes.some((node) => node.status === "WAITING_APPROVAL")) return "WAITING_APPROVAL";
+        if (nodes.some((node) => node.status === "RUNNING" || node.status === "RETRYING")) return "RUNNING";
+        if (nodes.length && nodes.every((node) => node.status === "SUCCEEDED")) return "SUCCEEDED";
+        if (nodes.some((node) => node.status === "CANCELLED")) return "CANCELLED";
+        return "PENDING";
+    }
+
+    function sortNodes(nodes) {
+        return [...nodes].sort((left, right) => {
+            const leftIndex = Number(left.metadata?.stepIndex || 999);
+            const rightIndex = Number(right.metadata?.stepIndex || 999);
+            return leftIndex - rightIndex;
+        });
+    }
+
+    function isTerminal(status) {
+        return status === "SUCCEEDED" || status === "FAILED" || status === "CANCELLED";
+    }
+
+    function durationFrom(startedAt, endedAt) {
+        if (!startedAt || !endedAt) return 0;
+        return Math.max(0, Date.parse(endedAt) - Date.parse(startedAt));
+    }
+
+    function formatInstant(value) {
+        if (!value) return "-";
+        try {
+            return new Date(value).toLocaleString("zh-CN", { hour12: false });
+        } catch (error) {
+            return value;
+        }
+    }
+
+    function formatDuration(value) {
+        const ms = Number(value || 0);
+        if (ms <= 0) return "0ms";
+        if (ms < 1000) return `${ms}ms`;
+        if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+        return `${(ms / 60000).toFixed(1)}m`;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(value).replaceAll("'", "&#39;");
+    }
+
+    refreshDashboard().catch((error) => {
         console.error(error);
-        alert(error.message || '控制面请求失败');
-    }
-
-    loadOverview().catch(showError);
-    window.approveTicket = approveTicket;
-    window.rejectTicket = rejectTicket;
-    window.inspectTimeline = inspectTimeline;
+        graphNoteEl.textContent = "Dashboard 初始化失败，请检查 gateway 是否启动。";
+    });
 </script>
 </body>
 </html>

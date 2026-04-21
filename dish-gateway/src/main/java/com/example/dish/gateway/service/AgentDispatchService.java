@@ -21,4 +21,9 @@ public interface AgentDispatchService {
      * 执行完整步骤列表（Phase B：串行执行）。
      */
     List<AgentResponse> dispatchAll(RoutingDecision routing, List<AgentExecutionStep> steps);
+
+    /**
+     * 执行单个步骤，保留 step 级上下文。
+     */
+    AgentResponse dispatchStep(RoutingDecision routing, AgentExecutionStep step);
 }

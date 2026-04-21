@@ -6,6 +6,7 @@ import com.example.dish.common.runtime.ExecutionEdgeCondition;
 import com.example.dish.common.runtime.ExecutionNode;
 import com.example.dish.common.runtime.ExecutionNodeType;
 import com.example.dish.common.runtime.ExecutionPlan;
+import com.example.dish.common.telemetry.DubboOpenTelemetrySupport;
 import com.example.dish.control.planner.model.PlanningRequest;
 import com.example.dish.control.planner.model.PlanningResult;
 import com.example.dish.control.planner.service.ExecutionPlannerService;
@@ -27,25 +28,32 @@ public class ExecutionPlannerServiceImpl implements ExecutionPlannerService {
 
     @Override
     public PlanningResult plan(PlanningRequest request) {
-        IntentType intent = resolveIntent(request);
-        String sessionId = request != null && request.context() != null ? request.context().getSessionId() : null;
-        String planId = sessionId != null && !sessionId.isBlank() ? "plan-" + sessionId : "plan-bootstrap";
+        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
+                DubboOpenTelemetrySupport.openProviderSpan("planner.plan", "dish-planner");
+        try (spanScope) {
+            IntentType intent = resolveIntent(request);
+            String sessionId = request != null && request.context() != null ? request.context().getSessionId() : null;
+            String planId = sessionId != null && !sessionId.isBlank() ? "plan-" + sessionId : "plan-bootstrap";
 
-        PlanGraph graph = buildGraph(intent);
-        ExecutionPlan plan = ExecutionPlan.builder()
-                .planId(planId)
-                .intent(intent.name())
-                .nodes(graph.nodes)
-                .edges(graph.edges)
-                .metadata(Map.of("plannerVersion", "planner-v1-rule-graph", "executionMode", graph.executionMode))
-                .build();
+            PlanGraph graph = buildGraph(intent);
+            ExecutionPlan plan = ExecutionPlan.builder()
+                    .planId(planId)
+                    .intent(intent.name())
+                    .nodes(graph.nodes)
+                    .edges(graph.edges)
+                    .metadata(Map.of("plannerVersion", "planner-v1-rule-graph", "executionMode", graph.executionMode))
+                    .build();
 
-        return new PlanningResult(
-                true,
-                "planner-v1-rule-graph",
-                "intent-based execution graph generated",
-                plan
-        );
+            return new PlanningResult(
+                    true,
+                    "planner-v1-rule-graph",
+                    "intent-based execution graph generated",
+                    plan
+            );
+        } catch (RuntimeException ex) {
+            spanScope.recordFailure(ex);
+            throw ex;
+        }
     }
 
     private PlanGraph buildGraph(IntentType intent) {

@@ -6,6 +6,7 @@ import java.util.Map;
 public record MemoryWriteRequest(
         String tenantId,
         String sessionId,
+        MemoryLayer memoryLayer,
         String memoryType,
         String content,
         Map<String, Object> metadata,

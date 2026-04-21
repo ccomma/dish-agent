@@ -7,6 +7,7 @@ public record MemoryTimelineRequest(
         String tenantId,
         String sessionId,
         String memoryType,
+        MemoryLayer memoryLayer,
         String keyword,
         Map<String, Object> metadataFilters,
         int limit,

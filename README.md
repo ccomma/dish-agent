@@ -4,6 +4,10 @@
 
 **v2.0 新增**：Spring Cloud Alibaba + Dubbo 微服务架构，每个 Agent 可独立部署。
 **v2.1 新增**：Control Plane 微服务群，支持 Planner / Policy / Memory 三层控制平面、独立 `dish-control-api` 契约模块、编排预览、审批闭环、可视化 Dashboard，以及 `Redis + 向量检索` 的长期记忆双层架构。
+**v2.2 新增**：`Redis + Milvus` 真正双层长期记忆、短期/审批/长期知识分层写入策略，以及控制台内置“向量命中分数 + 召回来源解释”可视化。
+**v2.3 新增**：Execution Runtime Store、SSE 实时步骤流、Execution Replay，以及可视化 Mission Control DAG 控制台。
+**v2.4 新增**：`Actuator + Prometheus + Grafana` 观测底座、execution runtime 自定义指标，以及统一 trace 传播规范。
+**v2.5 新增**：`OpenTelemetry + OTLP Collector + Tempo` 分布式追踪链路，Gateway 手工 step spans，以及 Dubbo context 透传。
 
 ## 项目概述
 
@@ -152,6 +156,22 @@ curl -X POST http://localhost:8080/api/control/plan-preview \
 curl "http://localhost:8080/api/control/sessions/SESSION_DEMO/memory?limit=10" \
   -H "X-Store-Id: STORE_001"
 
+# 查询语义召回解释
+curl "http://localhost:8080/api/control/sessions/SESSION_DEMO/memory/retrieval?query=经理审核退款要记录什么&layers=SHORT_TERM_SESSION,LONG_TERM_KNOWLEDGE" \
+  -H "X-Store-Id: STORE_001"
+
+# 查询某个 session 最近一次 execution DAG
+curl "http://localhost:8080/api/control/sessions/SESSION_DEMO/executions/latest" \
+  -H "X-Store-Id: STORE_001"
+
+# 查询 execution 图快照
+curl "http://localhost:8080/api/control/executions/exec-12345678" \
+  -H "X-Store-Id: STORE_001"
+
+# 查询 execution 事件回放
+curl "http://localhost:8080/api/control/executions/exec-12345678/replay" \
+  -H "X-Store-Id: STORE_001"
+
 # 审批通过
 curl -X POST http://localhost:8080/api/control/sessions/SESSION_DEMO/approvals/APR-12345678/approve \
   -H "Content-Type: application/json" \
@@ -164,6 +184,12 @@ curl "http://localhost:8080/api/control/dashboard/overview?limit=10" \
 
 # 打开可视化控制台
 open http://localhost:8080/control/dashboard
+
+# Gateway Prometheus 指标
+curl http://localhost:8080/actuator/prometheus
+
+# Memory Prometheus 指标
+curl http://localhost:8093/actuator/prometheus
 ```
 
 ## 生产化改造进展（2026-04）
@@ -187,14 +213,30 @@ open http://localhost:8080/control/dashboard
 - 审批票据查询接口：`GET /api/control/sessions/{sessionId}/approvals/{approvalId}`。
 - 审批闭环接口：`POST /api/control/sessions/{sessionId}/approvals/{approvalId}/approve|reject`。
 - 会话记忆时间线接口：`GET /api/control/sessions/{sessionId}/memory`。
+- 会话记忆召回解释接口：`GET /api/control/sessions/{sessionId}/memory/retrieval`。
+- 最近 execution 查询接口：`GET /api/control/sessions/{sessionId}/executions/latest`。
+- execution 图快照接口：`GET /api/control/executions/{executionId}`。
+- execution 回放接口：`GET /api/control/executions/{executionId}/replay`。
+- execution 实时流接口：`GET /api/control/executions/{executionId}/stream`（SSE）。
 - 控制面 Dashboard 接口：`GET /api/control/dashboard/overview`。
-- 控制面页面入口：`GET /control/dashboard`，提供审批队列、活跃会话、时间线检查器和编排预览工作台。
+- 控制面页面入口：`GET /control/dashboard`，提供 Mission Control DAG、Live Event Rail、Replay Console、审批队列和活跃会话工作台。
+- execution runtime store：`dish-memory` 额外保存 execution graph snapshot、event stream、session 最新 execution 索引，支持历史回放与实时 SSE 共用同一事件模型。
+- 每个微服务都暴露 `/actuator/health`、`/actuator/info`、`/actuator/metrics`、`/actuator/prometheus`，可直接接入 Prometheus。
+- Gateway 额外输出 execution runtime 指标：执行启动、结果状态、节点状态切换、节点延迟、审批决策、SSE 订阅数。
+- Gateway 关键执行链路额外产出手工 span：`gateway.step.dispatch`、`gateway.step.resume`，方便在 Trace 里直接看到节点级状态流转。
+- Dubbo Provider 统一通过 `DubboOpenTelemetrySupport` 从 RPC attachment 恢复父上下文，保证 `gateway -> planner/policy/memory/agent` trace 不断链。
+- 本地观测栈资源位于 `ops/observability/`，包含 `docker compose`、Prometheus 抓取配置、Grafana starter dashboard、OTLP Collector 和 Tempo。
+- trace 传播规范统一为：HTTP 头 `X-Trace-Id`，Dubbo attachment `traceId`，日志 MDC 键 `traceId`。
+- 默认 OTLP 上报端点为 `http://localhost:4318/v1/traces`；本地启动 `ops/observability/docker-compose.yml` 后即可直接在 Grafana 中联查指标和 Trace。
 - 独立契约层：新增 `dish-control-api`，网关不再直接依赖 planner/policy/memory 实现模块。
 - 结构化审批票据：审批记录以稳定可解析格式写入记忆服务，避免运行期 JSON 依赖冲突。
 - 结构化记忆时间线：记忆服务支持按 `memoryType`、关键字、元数据过滤，便于控制面排查。
 - 跨会话控制台聚合：记忆时间线支持按租户维度聚合，多会话 Dashboard 可直接从控制面查询。
 - Redis 持久化记忆层：`dish-memory` 支持 `memory.mode=redis`，会话时间线、审批票据和控制面聚合可持久化到 Redis。
-- 长期记忆混合检索：`dish-memory` 的 `MemoryReadService` 现在使用 `keyword + vector similarity + recency` 混合召回，支持非完全匹配的语义记忆检索。
+- 记忆写入分层：`execution_summary -> SHORT_TERM_SESSION`，`approval_ticket -> APPROVAL`，`operational_knowledge/knowledge_bootstrap -> LONG_TERM_KNOWLEDGE`。
+- 真正双层长期记忆：`dish-memory` 现在以 Redis 保存时间线和审批票据，以 Milvus 负责长期知识向量检索，并在控制面统一做融合排序。
+- 长期记忆混合检索：`dish-memory` 的 `MemoryReadService` 使用 `keyword + vector similarity + recency` 混合召回，支持非完全匹配的语义记忆检索。
+- 长期知识启动预热：`dish-memory/src/main/resources/memory/knowledge/*.md` 会在启动时自动写入长期知识层，方便本地演示和面试展示。
 
 ## 功能演示
 
@@ -232,7 +274,7 @@ open http://localhost:8080/control/dashboard
 | dish-control-api | - | Control Plane RPC 契约层 | Java Records, Dubbo Contracts |
 | dish-planner | 20884 (Dubbo) | DAG 执行规划、执行模式选择 | Planner Graph, Dubbo |
 | dish-policy | 20885 (Dubbo) | 风险判定、审批门禁 | Rule Engine, Dubbo |
-| dish-memory | 20886 (Dubbo) | 会话记忆、审批票据、时间线检索 | In-memory Timeline, Dubbo |
+| dish-memory | 20886 (Dubbo) | 会话记忆、审批票据、长期知识检索 | Redis Timeline, Milvus, Dubbo |
 | dish-agent-dish | 20881 (Dubbo) | 菜品 RAG + ReAct | RAGPipeline, Milvus, Cohere |
 | dish-agent-workorder | 20882 (Dubbo) | 库存/订单/退款 + ReAct | InventoryTools, ReActEngine |
 | dish-agent-chat | 20883 (Dubbo) | 闲聊对话 | LLM Chat |
@@ -340,6 +382,17 @@ memory:
     candidate-fetch-size: ${MEMORY_RETRIEVAL_CANDIDATE_FETCH_SIZE:200}
     keyword-weight: ${MEMORY_RETRIEVAL_KEYWORD_WEIGHT:0.45}
     vector-weight: ${MEMORY_RETRIEVAL_VECTOR_WEIGHT:0.55}
+  long-term:
+    provider: ${MEMORY_LONG_TERM_PROVIDER:inmemory} # inmemory | milvus
+    embedding-provider: ${MEMORY_LONG_TERM_EMBEDDING_PROVIDER:hash} # hash | openai
+    min-score: ${MEMORY_LONG_TERM_MIN_SCORE:0.12}
+    bootstrap:
+      enabled: ${MEMORY_LONG_TERM_BOOTSTRAP_ENABLED:true}
+      pattern: ${MEMORY_LONG_TERM_BOOTSTRAP_PATTERN:classpath*:memory/knowledge/*.md}
+    milvus:
+      host: ${MILVUS_HOST:localhost}
+      port: ${MILVUS_PORT:19530}
+      collection: ${MEMORY_MILVUS_COLLECTION:dish_memory_long_term}
 
 spring:
   data:
@@ -353,6 +406,8 @@ spring:
 - `bootstrap`：本地开发默认模式，使用进程内存时间线。
 - `redis`：生产推荐模式，时间线与审批票据写入 Redis，支持服务重启后保留状态。
 - Redis 模式下，时间线仍然按时间顺序保存在 Redis Sorted Set 中，同时为每条记忆生成向量并持久化，`MemoryReadService` 会做混合检索而不是只做字符串包含。
+- `memory.long-term.provider=milvus`：把长期知识记忆写入 Milvus；同时 Redis 继续维护控制面时间线，形成真正双层架构。
+- `memory.long-term.embedding-provider=hash`：默认使用确定性本地 embedding，方便无外部模型依赖地演示 Milvus；生产可切到 `openai`。
 
 ## 依赖说明
 

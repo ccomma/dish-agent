@@ -3,10 +3,9 @@ package com.example.dish.service.provider;
 import com.example.dish.common.context.AgentContext;
 import com.example.dish.common.contract.AgentResponse;
 import com.example.dish.common.rpc.DishAgentService;
+import com.example.dish.common.telemetry.DubboOpenTelemetrySupport;
 import com.example.dish.service.DishReActAgent;
 import org.apache.dubbo.config.annotation.DubboService;
-import org.apache.dubbo.rpc.RpcContext;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
@@ -21,36 +20,30 @@ import javax.annotation.Resource;
         retries = 0
 )
 public class DishAgentServiceImpl implements DishAgentService {
-
-    private static final String TRACE_ID_KEY = "traceId";
-
     @Resource
     private DishReActAgent dishReActAgent;
 
     @Override
     public AgentResponse answer(String userInput, AgentContext context) {
-        withTraceFromAttachment();
-        try {
+        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
+                DubboOpenTelemetrySupport.openProviderSpan("dish-agent.answer", "dish-agent-dish");
+        try (spanScope) {
             return dishReActAgent.answer(userInput, context);
-        } finally {
-            MDC.remove(TRACE_ID_KEY);
+        } catch (RuntimeException ex) {
+            spanScope.recordFailure(ex);
+            throw ex;
         }
     }
 
     @Override
     public AgentResponse answerWithReflection(String userInput, AgentContext context) {
-        withTraceFromAttachment();
-        try {
+        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
+                DubboOpenTelemetrySupport.openProviderSpan("dish-agent.answer_with_reflection", "dish-agent-dish");
+        try (spanScope) {
             return dishReActAgent.answerWithReflection(userInput, context);
-        } finally {
-            MDC.remove(TRACE_ID_KEY);
-        }
-    }
-
-    private void withTraceFromAttachment() {
-        String traceId = RpcContext.getServiceContext().getAttachment(TRACE_ID_KEY);
-        if (traceId != null && !traceId.isBlank()) {
-            MDC.put(TRACE_ID_KEY, traceId);
+        } catch (RuntimeException ex) {
+            spanScope.recordFailure(ex);
+            throw ex;
         }
     }
 }

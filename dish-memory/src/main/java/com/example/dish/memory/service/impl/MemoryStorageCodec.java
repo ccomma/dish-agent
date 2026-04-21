@@ -1,5 +1,7 @@
 package com.example.dish.memory.service.impl;
 
+import com.example.dish.control.memory.model.MemoryLayer;
+
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -12,11 +14,13 @@ final class MemoryStorageCodec {
     static String encode(MemoryReadServiceImpl.MemoryEntry entry) {
         Map<String, String> fields = new LinkedHashMap<>();
         put(fields, "entryId", entry.entryId());
+        put(fields, "memoryLayer", entry.memoryLayer() != null ? entry.memoryLayer().name() : null);
         put(fields, "memoryType", entry.memoryType());
         put(fields, "content", entry.content());
         put(fields, "traceId", entry.traceId());
         put(fields, "createdAt", entry.createdAt() != null ? entry.createdAt().toString() : null);
         put(fields, "sequence", String.valueOf(entry.sequence()));
+        put(fields, "storageSource", entry.storageSource());
         put(fields, "metadata", encodeMetadata(entry.metadata()));
 
         StringBuilder builder = new StringBuilder();
@@ -51,12 +55,14 @@ final class MemoryStorageCodec {
 
         return new MemoryReadServiceImpl.MemoryEntry(
                 fields.get("entryId"),
+                parseLayer(fields.get("memoryLayer")),
                 memoryType,
                 content,
                 decodeMetadata(fields.get("metadata")),
                 fields.get("traceId"),
                 parseInstant(fields.get("createdAt")),
-                parseLong(fields.get("sequence"))
+                parseLong(fields.get("sequence")),
+                fields.get("storageSource")
         );
     }
 
@@ -154,6 +160,13 @@ final class MemoryStorageCodec {
             return Instant.now();
         }
         return Instant.parse(value);
+    }
+
+    private static MemoryLayer parseLayer(String value) {
+        if (value == null || value.isBlank()) {
+            return MemoryLayer.SHORT_TERM_SESSION;
+        }
+        return MemoryLayer.valueOf(value);
     }
 
     private static long parseLong(String value) {

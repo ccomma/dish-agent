@@ -25,3 +25,26 @@ llm:
   base-url: ${MINIMAX_BASE_URL:https://api.minimax.chat/v1}
   model: ${MINIMAX_MODEL:minimax-m2.7}
   temperature: 0.7
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+observability:
+  trace:
+    header: X-Trace-Id
+    rpc-attachment: traceId

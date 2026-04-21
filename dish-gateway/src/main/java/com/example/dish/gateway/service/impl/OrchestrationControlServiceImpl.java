@@ -3,11 +3,15 @@ package com.example.dish.gateway.service.impl;
 import com.example.dish.common.contract.AgentExecutionStep;
 import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.common.runtime.ExecutionContext;
+import com.example.dish.common.runtime.ExecutionNodeStatus;
 import com.example.dish.common.runtime.ExecutionNode;
 import com.example.dish.common.runtime.ExecutionNodeType;
 import com.example.dish.common.runtime.ExecutionPlan;
 import com.example.dish.common.runtime.PolicyDecisionType;
 import com.example.dish.control.approval.model.ApprovalTicketCreateRequest;
+import com.example.dish.control.execution.model.ExecutionEdgeView;
+import com.example.dish.control.execution.model.ExecutionNodeView;
+import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.approval.service.ApprovalTicketService;
 import com.example.dish.control.memory.model.MemoryReadRequest;
 import com.example.dish.control.memory.model.MemoryReadResult;
@@ -21,6 +25,7 @@ import com.example.dish.control.policy.model.PolicyEvaluationRequest;
 import com.example.dish.control.policy.service.PolicyDecisionService;
 import com.example.dish.gateway.dto.GatewayResponse;
 import com.example.dish.gateway.dto.control.PlanPreviewResponse;
+import com.example.dish.gateway.dto.control.SessionMemoryRetrievalHitResponse;
 import com.example.dish.gateway.dto.control.StepPolicyPreview;
 import com.example.dish.gateway.service.OrchestrationControlService;
 import org.apache.dubbo.config.annotation.DubboReference;
@@ -246,21 +251,26 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
                 routing != null ? routing.executionMode() : null,
                 routing != null ? routing.confidence() : 0,
                 memoryHit(routing),
+                memorySource(routing),
                 memorySnippets(routing),
+                memoryHits(routing),
                 approvalRequiredCount,
                 blockedStepCount,
+                toPreviewNodes(steps),
+                toPreviewEdges(steps),
                 previewSteps
         );
     }
 
     @Override
-    public String createApprovalTicket(RoutingDecision routing, AgentExecutionStep step, String traceId) {
+    public String createApprovalTicket(RoutingDecision routing, String executionId, AgentExecutionStep step, String traceId) {
         String approvalId = "APR-" + UUID.randomUUID().toString().substring(0, 8);
         String storeId = routing != null && routing.context() != null ? routing.context().getStoreId() : null;
         String sessionId = routing != null && routing.context() != null ? routing.context().getSessionId() : null;
 
         var result = approvalTicketService.create(new ApprovalTicketCreateRequest(
                 approvalId,
+                executionId,
                 storeId,
                 sessionId,
                 traceId,
@@ -276,6 +286,52 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
                     approvalId, sessionId, traceId, result != null ? result.message() : null);
         }
         return approvalId;
+    }
+
+    private List<ExecutionNodeView> toPreviewNodes(List<AgentExecutionStep> steps) {
+        if (steps == null || steps.isEmpty()) {
+            return List.of();
+        }
+        List<ExecutionNodeView> nodes = new ArrayList<>();
+        for (AgentExecutionStep step : steps) {
+            nodes.add(new ExecutionNodeView(
+                    step.stepId(),
+                    step.targetAgent(),
+                    step.nodeType(),
+                    ExecutionNodeStatus.PENDING,
+                    false,
+                    asString(step.metadata() != null ? step.metadata().get("riskLevel") : null),
+                    0L,
+                    null,
+                    null,
+                    null,
+                    step.metadata() != null ? Map.copyOf(step.metadata()) : Map.of()
+            ));
+        }
+        return nodes;
+    }
+
+    private List<ExecutionEdgeView> toPreviewEdges(List<AgentExecutionStep> steps) {
+        if (steps == null || steps.isEmpty()) {
+            return List.of();
+        }
+        List<ExecutionEdgeView> edges = new ArrayList<>();
+        int edgeIndex = 1;
+        for (AgentExecutionStep step : steps) {
+            if (step.dependsOn() == null) {
+                continue;
+            }
+            for (String dependency : step.dependsOn()) {
+                edges.add(new ExecutionEdgeView(
+                        "preview-edge-" + edgeIndex++,
+                        dependency,
+                        step.stepId(),
+                        "ON_SUCCESS",
+                        Map.of()
+                ));
+            }
+        }
+        return edges;
     }
 
     private com.example.dish.common.runtime.PolicyDecision evaluatePolicy(AgentExecutionStep step, RoutingDecision routing, String traceId) {
@@ -321,6 +377,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         MemoryWriteRequest writeRequest = new MemoryWriteRequest(
                 storeId,
                 sessionId,
+                MemoryLayer.SHORT_TERM_SESSION,
                 "execution_summary",
                 summary,
                 metadataMap(
@@ -338,6 +395,27 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         boolean writeOk = memoryWriteService.write(writeRequest);
         if (!writeOk) {
             log.warn("memory write skipped or failed: sessionId={}, traceId={}", sessionId, traceId);
+        }
+
+        if (success && executedStepCount > 0) {
+            memoryWriteService.write(new MemoryWriteRequest(
+                    storeId,
+                    sessionId,
+                    MemoryLayer.LONG_TERM_KNOWLEDGE,
+                    "operational_knowledge",
+                    "intent=" + (routing != null && routing.intent() != null ? routing.intent().name() : null)
+                            + ", executionMode=" + (routing != null ? routing.executionMode() : null)
+                            + ", executedSteps=" + executedStepCount
+                            + ", outcome=" + (success ? "success" : "failed"),
+                    metadataMap(
+                            "traceId", traceId,
+                            "planId", routing != null ? routing.planId() : null,
+                            "sessionId", sessionId,
+                            "storeId", storeId,
+                            "promotedFrom", "execution_summary"
+                    ),
+                    traceId
+            ));
         }
     }
 
@@ -357,17 +435,22 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
                     storeId,
                     sessionId,
                     routing.context().getUserInput(),
+                    List.of(MemoryLayer.SHORT_TERM_SESSION, MemoryLayer.APPROVAL, MemoryLayer.LONG_TERM_KNOWLEDGE),
+                    5,
                     traceId
             ));
             routing.context().getMetadata().put("traceId", traceId);
             routing.context().getMetadata().put("memoryHit", result != null && result.hit());
             routing.context().getMetadata().put("memorySource", result != null ? result.source() : "unknown");
             routing.context().getMetadata().put("memorySnippets", result != null ? result.snippets() : List.of());
+            routing.context().getMetadata().put("memoryHits", result != null ? result.hits() : List.of());
         } catch (Exception ex) {
             log.warn("memory read failed: sessionId={}, traceId={}, message={}",
                     sessionId, traceId, ex.getMessage());
             routing.context().getMetadata().put("memoryHit", false);
+            routing.context().getMetadata().put("memorySource", "unavailable");
             routing.context().getMetadata().put("memorySnippets", List.of());
+            routing.context().getMetadata().put("memoryHits", List.of());
         }
     }
 
@@ -427,6 +510,14 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         return value instanceof Boolean bool && bool;
     }
 
+    private String memorySource(RoutingDecision routing) {
+        if (routing == null || routing.context() == null) {
+            return "none";
+        }
+        Object value = routing.context().getMetadata().get("memorySource");
+        return value instanceof String text ? text : "none";
+    }
+
     @SuppressWarnings("unchecked")
     private List<String> memorySnippets(RoutingDecision routing) {
         if (routing == null || routing.context() == null) {
@@ -438,6 +529,36 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         }
         return List.of();
     }
+
+    @SuppressWarnings("unchecked")
+    private List<SessionMemoryRetrievalHitResponse> memoryHits(RoutingDecision routing) {
+        if (routing == null || routing.context() == null) {
+            return List.of();
+        }
+        Object value = routing.context().getMetadata().get("memoryHits");
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .filter(com.example.dish.control.memory.model.MemoryRetrievalHit.class::isInstance)
+                .map(com.example.dish.control.memory.model.MemoryRetrievalHit.class::cast)
+                .map(hit -> new SessionMemoryRetrievalHitResponse(
+                        hit.memoryType(),
+                        hit.memoryLayer() != null ? hit.memoryLayer().name() : null,
+                        hit.content(),
+                        hit.metadata(),
+                        hit.traceId(),
+                        hit.createdAt(),
+                        hit.sequence(),
+                        hit.retrievalSource(),
+                        hit.totalScore(),
+                        hit.keywordScore(),
+                        hit.vectorScore(),
+                        hit.recencyScore(),
+                        hit.explanation()
+                ))
+                .toList();
+    }
     private Map<String, Object> metadataMap(Object... keyValues) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         for (int i = 0; i < keyValues.length - 1; i += 2) {
@@ -448,5 +569,9 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
             }
         }
         return metadata;
+    }
+
+    private String asString(Object value) {
+        return value instanceof String text ? text : null;
     }
 }
