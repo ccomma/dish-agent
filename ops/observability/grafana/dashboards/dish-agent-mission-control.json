@@ -65,7 +65,65 @@
     {
       "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 7 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 7 },
+      "id": 10,
+      "options": {
+        "content": "### Trace Bridge\n\n- **Trace ID**: `${traceId}`\n- **Execution ID**: `${executionId}`\n- **Target Agent**: `${targetAgent}`\n- **Focus Service**: `${focusService}`\n- **Node ID**: `${nodeId}`\n\n控制台会把 execution / node 焦点通过 dashboard variables 深链进来。你可以先看下面的 drill-down 指标，再切到右侧 Service Graph Map 理解链路位置。",
+        "mode": "markdown"
+      },
+      "title": "Trace Bridge Context",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 15 },
+      "id": 11,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (status) (rate(dish_execution_node_transitions_total{target_agent=~\"${targetAgent}\"}[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Trace Drill-Down: Node Transition Focus",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "gridPos": { "h": 9, "w": 8, "x": 8, "y": 15 },
+      "id": 12,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(dish_execution_node_latency_seconds_bucket{target_agent=~\"${targetAgent}\"}[5m])))",
+          "legendFormat": "selected agent p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Trace Drill-Down: Selected Agent Latency P95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 15 },
+      "id": 13,
+      "options": {
+        "content": "### Service Graph Map\n\n`dish-gateway -> dish-planner -> dish-policy -> dish-memory -> ${focusService}`\n\n这个面板把当前焦点服务固定成控制台选中的 target agent。实际 Trace 请结合左侧 drill-down 指标和控制台中的 DAG 节点状态一起看。",
+        "mode": "markdown"
+      },
+      "title": "Service Graph Map",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 24 },
       "id": 5,
       "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -82,7 +140,7 @@
     {
       "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 7 },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 24 },
       "id": 6,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
@@ -99,7 +157,7 @@
     {
       "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 33 },
       "id": 7,
       "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -116,7 +174,7 @@
     {
       "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 33 },
       "id": 8,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
@@ -133,7 +191,24 @@
     {
       "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 25 },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 42 },
+      "id": 14,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (application, status) (rate(http_server_requests_seconds_count{application=~\"${focusService}|dish-gateway|dish-planner|dish-policy|dish-memory\"}[5m]))",
+          "legendFormat": "{{application}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service Graph Traffic Lanes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "DishAgentPrometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 42 },
       "id": 9,
       "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -151,13 +226,66 @@
   "refresh": "10s",
   "schemaVersion": 39,
   "style": "dark",
-  "tags": ["dish-agent", "mission-control", "prometheus"],
-  "templating": { "list": [] },
+  "tags": ["dish-agent", "mission-control", "prometheus", "tempo", "trace"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Trace ID",
+        "name": "traceId",
+        "options": [],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Execution ID",
+        "name": "executionId",
+        "options": [],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": { "selected": false, "text": ".*", "value": ".*" },
+        "hide": 0,
+        "label": "Target Agent",
+        "name": "targetAgent",
+        "options": [],
+        "query": ".*",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": { "selected": false, "text": "dish-agent-chat", "value": "dish-agent-chat" },
+        "hide": 0,
+        "label": "Focus Service",
+        "name": "focusService",
+        "options": [],
+        "query": "dish-agent-chat",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 2,
+        "label": "Node ID",
+        "name": "nodeId",
+        "options": [],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
   "time": { "from": "now-30m", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "Dish Agent Mission Control",
   "uid": "dish-agent-mission-control",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

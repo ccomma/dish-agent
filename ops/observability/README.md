@@ -8,6 +8,11 @@
 - `otel-collector/config.yaml`：接收应用 OTLP traces 并转发到 Tempo
 - `tempo/tempo.yml`：本地 trace 存储与查询配置
 
+这套资源现在默认支持两类展示：
+
+- Grafana Mission Control：看 execution 总体指标、Trace Bridge、Trace Drill-Down 和 Service Graph Map
+- Gateway `/control/dashboard`：看 DAG、实时事件流、审批队列，并一键深链到 Grafana 的 trace / service graph 视图
+
 ## 启动方式
 
 ```bash

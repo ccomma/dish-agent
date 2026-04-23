@@ -370,6 +370,7 @@ dish-agent/
 - 审批必须走 `ApprovalTicketService` 完成创建、查询、批准/拒绝闭环，避免状态只散落在网关内存中。
 - `dish-gateway` 仅依赖 `dish-control-api`，不要再直接依赖 control plane provider 实现模块中的接口类。
 - 可视化页面入口固定为 `GET /control/dashboard`；新增控制台功能时，优先复用现有控制面 API，而不是另开平行接口。
+- Mission Control 控制台新增展示时，优先围绕现有 execution graph / replay / traceId 构造 Grafana deep link，不要再造第二套运行态入口。
 - execution runtime 统一由 Gateway 产出事件、`dish-memory` 持久化 graph snapshot / replay / latest execution 索引；不要在页面层拼装运行态。
 - `GET /api/control/executions/{executionId}/stream` 必须输出稳定 JSON SSE 事件，历史回放接口与实时流接口复用同一事件 DTO。
 - `/api/chat/process` 的真实执行链路必须持续写入 `ExecutionRuntimeWriteService`，不能只在末尾写一条摘要。
@@ -378,12 +379,14 @@ dish-agent/
 - Gateway 关键执行路径的手工 span 统一通过 `GatewayExecutionTracing` 维护；新增 step 执行或恢复链路时，优先补 span 而不是只打日志。
 - Dubbo Provider 侧的 trace 恢复统一通过 `DubboOpenTelemetrySupport` 完成；不要在各服务里重复手写 attachment 解析。
 - 观测启动资源固定维护在 `ops/observability/`，包括 `docker-compose.yml`、Prometheus 抓取配置、Grafana dashboard、OTLP Collector 和 Tempo 配置。
+- `ops/observability/grafana/dashboards/dish-agent-mission-control.json` 必须持续兼容控制台传入的 `traceId`、`executionId`、`targetAgent`、`focusService` 变量；调整变量名时需同步更新控制台链接生成逻辑。
 - `memory.mode=redis` 时，时间线与审批票据必须可在服务重启后恢复；本地测试允许退回 `bootstrap` 内存模式。
 - 长期记忆默认采用双层结构：Redis 存储时间线与审批票据，Milvus 负责 `LONG_TERM_KNOWLEDGE` 语义召回；不要把 `MemoryReadService` 退化回纯字符串匹配。
 - 记忆写入必须分层：`SHORT_TERM_SESSION` 用于执行摘要和短期会话状态，`APPROVAL` 用于审批票据与审批决策，`LONG_TERM_KNOWLEDGE` 用于跨会话可复用经验和启动预热知识。
 - `dish-memory/src/main/resources/memory/knowledge/*.md` 是长期知识预热入口；新增长期知识样例时，优先放在这里而不是散落进 Java 常量。
 - 控制台中的“Semantic Recall Explorer”依赖 `GET /api/control/sessions/{sessionId}/memory/retrieval`；如果调整召回 DTO，必须同步更新控制台展示与测试。
 - 控制台中的 Mission Control DAG 依赖 `GET /api/control/sessions/{sessionId}/executions/latest`、`GET /api/control/executions/{executionId}`、`GET /api/control/executions/{executionId}/replay` 和 execution SSE stream；调整 DTO 时必须同步更新控制台展示与测试。
+- 控制台中的 Trace Bridge 依赖 execution graph 内的 `traceId`、节点 `targetAgent` 和时间窗；若调整 execution DTO 字段，必须同步更新 Grafana deep link 和 service graph 展示。
 - `memory.retrieval.vector-dim`、`memory.retrieval.keyword-weight`、`memory.retrieval.vector-weight` 属于检索质量调优参数，修改时应补充回归测试或效果说明。
 - `memory.long-term.provider`、`memory.long-term.milvus.*`、`memory.long-term.embedding-provider` 属于长期知识层配置，修改后需同步校验本地 fallback 与 Milvus 路径都可用。
 - 新增控制面接口时，优先考虑面试展示价值：可解释编排、审批闭环、记忆时间线、trace 关联。

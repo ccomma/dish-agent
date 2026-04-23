@@ -316,6 +316,7 @@
         .dag-node.failed { border-color: rgba(243, 138, 138, 0.82); box-shadow: 0 0 0 1px rgba(243, 138, 138, 0.16), 0 0 30px rgba(243, 138, 138, 0.18); }
         .dag-node.retrying { border-color: rgba(255, 173, 91, 0.85); box-shadow: 0 0 0 1px rgba(255, 173, 91, 0.18), 0 0 30px rgba(255, 173, 91, 0.2); }
         .dag-node.cancelled { border-color: rgba(125, 132, 148, 0.62); opacity: 0.76; }
+        .dag-node.selected { outline: 2px solid rgba(255,255,255,0.88); transform: translateY(-3px); }
 
         @keyframes pulse {
             0% { transform: translateY(0); }
@@ -383,23 +384,35 @@
         .event-list,
         .session-list,
         .approval-list,
-        .preview-list {
+        .preview-list,
+        .trace-stack {
             display: grid;
             gap: 12px;
         }
 
         .list-card,
         .event-card,
-        .preview-card {
+        .preview-card,
+        .trace-card {
             padding: 14px 15px;
             border-radius: var(--radius-md);
             border: 1px solid rgba(255,255,255,0.06);
             background: rgba(255,255,255,0.035);
         }
 
+        .trace-card strong {
+            display: block;
+            margin-top: 8px;
+            font-size: 14px;
+            font-family: var(--mono);
+            color: var(--text);
+            word-break: break-word;
+        }
+
         .event-card small,
         .list-card small,
-        .preview-card small {
+        .preview-card small,
+        .trace-card small {
             color: var(--muted);
             font-size: 11px;
             letter-spacing: 0.08em;
@@ -408,11 +421,99 @@
 
         .event-card p,
         .list-card p,
-        .preview-card p {
+        .preview-card p,
+        .trace-card p {
             margin: 8px 0 0;
             color: var(--muted);
             line-height: 1.55;
             font-size: 13px;
+        }
+
+        .trace-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .trace-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .action-link {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 46px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            text-decoration: none;
+            font-weight: 600;
+            color: #09111d;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+            transition: transform 120ms ease, opacity 120ms ease;
+        }
+
+        .action-link:hover { transform: translateY(-1px); }
+
+        .action-link.secondary {
+            background: rgba(255,255,255,0.06);
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .service-map {
+            display: grid;
+            gap: 10px;
+        }
+
+        .service-lane {
+            display: grid;
+            grid-template-columns: repeat(9, minmax(0, 1fr));
+            gap: 8px;
+            align-items: center;
+        }
+
+        .service-node {
+            position: relative;
+            padding: 12px 10px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03);
+            color: var(--muted);
+            text-align: center;
+            font-size: 12px;
+            font-family: var(--mono);
+        }
+
+        .service-node.focus {
+            color: var(--text);
+            border-color: rgba(95, 180, 255, 0.72);
+            box-shadow: 0 0 0 1px rgba(95, 180, 255, 0.16), 0 0 22px rgba(95, 180, 255, 0.12);
+            background: rgba(95, 180, 255, 0.08);
+        }
+
+        .service-node.active-hop::after {
+            content: "";
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            border: 1px solid rgba(73, 224, 193, 0.58);
+            pointer-events: none;
+        }
+
+        .lane-arrow {
+            text-align: center;
+            color: var(--accent);
+            font-size: 16px;
+            font-family: var(--mono);
+        }
+
+        .trace-caption {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.6;
         }
 
         .actions,
@@ -468,6 +569,24 @@
             box-shadow: 0 0 0 1px rgba(95, 180, 255, 0.24), 0 0 20px rgba(95, 180, 255, 0.16);
         }
 
+        .node-inline-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .node-inline-actions button {
+            padding: 8px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .event-card.selected {
+            border-color: rgba(95, 180, 255, 0.65);
+            box-shadow: 0 0 0 1px rgba(95, 180, 255, 0.12), 0 0 26px rgba(95, 180, 255, 0.1);
+        }
+
         .empty {
             padding: 18px;
             border-radius: var(--radius-md);
@@ -489,7 +608,9 @@
             }
 
             .execution-meta,
-            .hero-metrics {
+            .hero-metrics,
+            .trace-grid,
+            .trace-actions {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
@@ -507,7 +628,9 @@
             .execution-meta,
             .hero-metrics,
             .control-grid,
-            .control-grid-wide {
+            .control-grid-wide,
+            .trace-grid,
+            .trace-actions {
                 grid-template-columns: 1fr;
             }
 
@@ -619,6 +742,31 @@
             <section class="panel">
                 <div class="panel-head">
                     <div>
+                        <h2>Trace Bridge</h2>
+                        <p>把当前 execution、选中节点和 Grafana drill-down 串成一条连续的下钻轨道。</p>
+                    </div>
+                    <span class="status-pill" id="trace-bridge-state">等待 execution</span>
+                </div>
+                <div class="trace-stack">
+                    <div class="trace-grid" id="trace-summary"></div>
+                    <div class="trace-actions">
+                        <a class="action-link" id="open-grafana-dashboard" href="#" target="_blank" rel="noopener noreferrer">Open Grafana</a>
+                        <a class="action-link secondary" id="open-trace-drilldown" href="#" target="_blank" rel="noopener noreferrer">Trace Drill-Down</a>
+                        <a class="action-link secondary" id="open-service-graph" href="#" target="_blank" rel="noopener noreferrer">Service Graph</a>
+                        <button class="secondary" id="copy-mission-link">Copy Mission Link</button>
+                    </div>
+                    <div class="trace-card">
+                        <small>Service Graph</small>
+                        <strong id="service-graph-title">gateway -> planner -> policy -> memory -> agent</strong>
+                        <p class="trace-caption">点击 DAG 节点后，会把当前 target agent 变成下钻焦点，并联动右侧事件流和 Grafana service graph 深链。</p>
+                        <div class="service-map" id="service-map"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <div>
                         <h2>Live Event Rail</h2>
                         <p>每次状态切换都会落成稳定 JSON 事件，并同步广播到这里。</p>
                     </div>
@@ -655,6 +803,7 @@
         storeId: "STORE_001",
         selectedSessionId: "SESSION_DEMO",
         selectedExecutionId: null,
+        selectedNodeId: null,
         graph: null,
         replay: null,
         displayedEvents: [],
@@ -665,6 +814,9 @@
         stream: null,
         planPreview: null
     };
+
+    const GRAFANA_BASE_URL = `${window.location.protocol}//${window.location.hostname || "localhost"}:3000`;
+    const GRAFANA_DASHBOARD_UID = "dish-agent-mission-control";
 
     const nodesEl = document.getElementById("dag-nodes");
     const edgesEl = document.getElementById("dag-edges");
@@ -677,6 +829,10 @@
     const graphNoteEl = document.getElementById("graph-note");
     const streamStateEl = document.getElementById("stream-state");
     const replayStatusEl = document.getElementById("replay-status");
+    const traceBridgeStateEl = document.getElementById("trace-bridge-state");
+    const traceSummaryEl = document.getElementById("trace-summary");
+    const serviceMapEl = document.getElementById("service-map");
+    const serviceGraphTitleEl = document.getElementById("service-graph-title");
 
     document.getElementById("store-id").addEventListener("change", (event) => {
         state.storeId = event.target.value || "STORE_001";
@@ -697,6 +853,7 @@
     document.getElementById("replay-play").addEventListener("click", startReplay);
     document.getElementById("replay-pause").addEventListener("click", pauseReplay);
     document.getElementById("replay-reset").addEventListener("click", resetReplay);
+    document.getElementById("copy-mission-link").addEventListener("click", copyMissionLink);
     document.querySelectorAll(".speed-btn").forEach((button) => {
         button.addEventListener("click", () => {
             state.replaySpeed = Number(button.dataset.speed);
@@ -727,6 +884,7 @@
         document.getElementById("mode-live").classList.toggle("active", mode === "live");
         document.getElementById("mode-replay").classList.toggle("active", mode === "replay");
         replayStatusEl.textContent = mode === "live" ? "实时订阅" : "历史回放";
+        syncMissionUrl();
     }
 
     async function refreshDashboard() {
@@ -836,9 +994,11 @@
         });
         state.planPreview = preview;
         state.selectedExecutionId = null;
+        state.selectedNodeId = null;
         disconnectStream();
         setMode("replay");
         renderPreview(preview);
+        syncMissionUrl();
     }
 
     function renderPreview(preview) {
@@ -860,6 +1020,7 @@
             totalEvents: 0
         };
         state.graph = previewGraph;
+        state.selectedNodeId = previewGraph.nodes?.[0]?.nodeId || null;
         state.replay = null;
         state.displayedEvents = [];
         renderExecutionMeta(previewGraph, "Preview");
@@ -889,6 +1050,7 @@
             return;
         }
         await openExecution(graph.executionId, isTerminal(graph.overallStatus) ? "replay" : "live", graph);
+        syncMissionUrl();
     }
 
     async function openExecution(executionId, preferredMode = "live", prefetchedGraph = null) {
@@ -896,6 +1058,10 @@
         state.selectedExecutionId = executionId;
         const graph = prefetchedGraph || await api(`/api/control/executions/${encodeURIComponent(executionId)}`);
         state.graph = graph;
+        state.selectedSessionId = graph.sessionId || state.selectedSessionId;
+        state.selectedNodeId = state.selectedNodeId && graph.nodes?.some((node) => node.nodeId === state.selectedNodeId)
+            ? state.selectedNodeId
+            : graph.nodes?.[0]?.nodeId || null;
         renderExecutionMeta(graph, preferredMode === "live" ? "Live" : "Replay");
         renderGraph(graph);
         const replay = await api(`/api/control/executions/${encodeURIComponent(executionId)}/replay`);
@@ -917,6 +1083,7 @@
             disconnectStream();
             resetReplay();
         }
+        syncMissionUrl();
     }
 
     function renderExecutionMeta(graph, surfaceMode) {
@@ -934,6 +1101,58 @@
                 <strong>${escapeHtml(String(value))}</strong>
             </article>
         `).join("");
+        renderTraceBridge(graph, surfaceMode);
+    }
+
+    function renderTraceBridge(graph, surfaceMode) {
+        if (!graph) {
+            traceBridgeStateEl.textContent = "等待 execution";
+            traceSummaryEl.innerHTML = `<div class="empty" style="grid-column:1/-1;">打开 execution 后，这里会生成 Grafana drill-down 和 service graph 深链。</div>`;
+            serviceMapEl.innerHTML = `<div class="empty">等待 DAG 上下文。</div>`;
+            serviceGraphTitleEl.textContent = "gateway -> planner -> policy -> memory -> agent";
+            setActionLink("open-grafana-dashboard", "#");
+            setActionLink("open-trace-drilldown", "#");
+            setActionLink("open-service-graph", "#");
+            return;
+        }
+
+        const selectedNode = findSelectedNode(graph);
+        const focusAgent = selectedNode?.targetAgent || graph.nodes?.[0]?.targetAgent || graph.metadata?.routingTargetAgent || "chat";
+        const focusService = toServiceName(focusAgent);
+        const timeRange = computeTimeRange(graph);
+        const rows = [
+            ["Trace ID", graph.traceId || "-"],
+            ["Selected Node", selectedNode?.nodeId || "__execution__"],
+            ["Target Agent", focusAgent || "-"],
+            ["Time Window", `${new Date(timeRange.from).toLocaleTimeString("zh-CN", { hour12: false })} - ${new Date(timeRange.to).toLocaleTimeString("zh-CN", { hour12: false })}`]
+        ];
+        traceSummaryEl.innerHTML = rows.map(([label, value]) => `
+            <article class="trace-card">
+                <small>${escapeHtml(label)}</small>
+                <strong>${escapeHtml(String(value))}</strong>
+                <p>${escapeHtml(describeTraceField(label, graph, selectedNode, surfaceMode))}</p>
+            </article>
+        `).join("");
+
+        traceBridgeStateEl.textContent = `${surfaceMode} / ${selectedNode?.status || graph.overallStatus || "PENDING"}`;
+        serviceGraphTitleEl.textContent = `gateway -> planner -> policy -> memory -> ${focusService}`;
+        serviceMapEl.innerHTML = renderServiceMap(focusService);
+
+        setActionLink("open-grafana-dashboard", buildGrafanaDashboardUrl());
+        setActionLink("open-trace-drilldown", buildGrafanaDashboardUrl(12));
+        setActionLink("open-service-graph", buildGrafanaDashboardUrl(13));
+    }
+
+    function renderServiceMap(focusService) {
+        const services = ["dish-gateway", "dish-planner", "dish-policy", "dish-memory", focusService || "dish-agent-chat"];
+        return `
+            <div class="service-lane">
+                ${services.map((service, index) => `
+                    <div class="service-node ${index === services.length - 1 ? "focus active-hop" : "active-hop"}">${escapeHtml(service)}</div>
+                    ${index < services.length - 1 ? `<div class="lane-arrow">→</div>` : ""}
+                `).join("")}
+            </div>
+        `;
     }
 
     function renderGraph(graph) {
@@ -988,7 +1207,7 @@
             const position = positions.get(node.nodeId);
             const statusClass = String(node.status || "PENDING").toLowerCase();
             return `
-                <article class="dag-node ${statusClass}" style="left:${position.x}px; top:${position.y}px;">
+                <article class="dag-node ${statusClass} ${state.selectedNodeId === node.nodeId ? "selected" : ""}" data-node-id="${escapeAttr(node.nodeId)}" style="left:${position.x}px; top:${position.y}px;">
                     <div class="node-top">
                         <div>
                             <div class="node-title">${escapeHtml(node.targetAgent || node.nodeId)}</div>
@@ -1003,9 +1222,35 @@
                     </div>
                     <div class="node-reason">${escapeHtml(node.statusReason || "waiting for runtime event")}</div>
                     ${node.approvalId ? `<div class="node-sub" style="margin-top:10px;">approval ${escapeHtml(node.approvalId)}</div>` : ""}
+                    <div class="node-inline-actions">
+                        <button class="secondary" data-node-focus="${escapeAttr(node.nodeId)}">Focus Node</button>
+                        <button class="ghost" data-node-trace="${escapeAttr(node.nodeId)}">Trace</button>
+                    </div>
                 </article>
             `;
         }).join("");
+
+        nodesEl.querySelectorAll("[data-node-focus]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                state.selectedNodeId = button.dataset.nodeFocus;
+                renderExecutionMeta(state.graph, state.mode === "live" ? "Live" : "Replay");
+                renderGraph(state.graph);
+                renderEventRail(state.displayedEvents);
+                syncMissionUrl();
+            });
+        });
+        nodesEl.querySelectorAll("[data-node-trace]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                state.selectedNodeId = button.dataset.nodeTrace;
+                renderExecutionMeta(state.graph, state.mode === "live" ? "Live" : "Replay");
+                renderGraph(state.graph);
+                renderEventRail(state.displayedEvents);
+                syncMissionUrl();
+                window.open(buildGrafanaDashboardUrl(12), "_blank", "noopener,noreferrer");
+            });
+        });
     }
 
     function renderEventRail(events) {
@@ -1014,7 +1259,7 @@
             return;
         }
         eventListEl.innerHTML = events.slice().reverse().map((item) => `
-            <article class="event-card">
+            <article class="event-card ${state.selectedNodeId && item.nodeId === state.selectedNodeId ? "selected" : ""}" data-event-node-id="${escapeAttr(item.nodeId || "__execution__")}">
                 <div class="list-item-top">
                     <div>
                         <small>${escapeHtml(item.nodeId || "__execution__")}</small>
@@ -1030,6 +1275,18 @@
                 <p>${escapeHtml(item.metadata?.statusReason || item.payload?.responseSummary || "execution event")}</p>
             </article>
         `).join("");
+        eventListEl.querySelectorAll("[data-event-node-id]").forEach((card) => {
+            card.addEventListener("click", () => {
+                const nodeId = card.dataset.eventNodeId;
+                if (nodeId && nodeId !== "__execution__") {
+                    state.selectedNodeId = nodeId;
+                    renderExecutionMeta(state.graph, state.mode === "live" ? "Live" : "Replay");
+                    renderGraph(state.graph);
+                    renderEventRail(state.displayedEvents);
+                    syncMissionUrl();
+                }
+            });
+        });
     }
 
     function renderPreviewEvent(item) {
@@ -1218,6 +1475,132 @@
         return `${(ms / 60000).toFixed(1)}m`;
     }
 
+    function findSelectedNode(graph) {
+        if (!graph || !graph.nodes?.length) return null;
+        return graph.nodes.find((node) => node.nodeId === state.selectedNodeId) || graph.nodes[0];
+    }
+
+    function toServiceName(targetAgent) {
+        const key = String(targetAgent || "").toLowerCase();
+        if (key.includes("work")) return "dish-agent-workorder";
+        if (key.includes("dish")) return "dish-agent-dish";
+        if (key.includes("chat")) return "dish-agent-chat";
+        return "dish-agent-chat";
+    }
+
+    function computeTimeRange(graph) {
+        const started = graph?.startedAt ? Date.parse(graph.startedAt) : Date.now();
+        const finished = graph?.finishedAt ? Date.parse(graph.finishedAt) : Date.now();
+        return {
+            from: Math.max(0, started - 60_000),
+            to: Math.max(started + 120_000, finished + 60_000)
+        };
+    }
+
+    function currentGrafanaParams() {
+        const graph = state.graph;
+        const selectedNode = findSelectedNode(graph);
+        const timeRange = computeTimeRange(graph || {});
+        const targetAgent = selectedNode?.targetAgent || graph?.nodes?.[0]?.targetAgent || "chat";
+        const focusService = toServiceName(targetAgent);
+        return {
+            traceId: graph?.traceId || "",
+            executionId: graph?.executionId || "",
+            targetAgent,
+            focusService,
+            nodeId: selectedNode?.nodeId || "",
+            from: timeRange.from,
+            to: timeRange.to
+        };
+    }
+
+    function buildGrafanaDashboardUrl(viewPanelId) {
+        const params = currentGrafanaParams();
+        const url = new URL(`/d/${GRAFANA_DASHBOARD_UID}/dish-agent-mission-control`, GRAFANA_BASE_URL);
+        url.searchParams.set("from", String(params.from));
+        url.searchParams.set("to", String(params.to));
+        url.searchParams.set("var-traceId", params.traceId || "");
+        url.searchParams.set("var-executionId", params.executionId || "");
+        url.searchParams.set("var-targetAgent", params.targetAgent || ".*");
+        url.searchParams.set("var-focusService", params.focusService || "dish-gateway");
+        url.searchParams.set("var-nodeId", params.nodeId || "");
+        if (viewPanelId) {
+            url.searchParams.set("viewPanel", String(viewPanelId));
+        }
+        return url.toString();
+    }
+
+    function buildMissionLink() {
+        const url = new URL(window.location.href);
+        url.searchParams.set("storeId", state.storeId || "STORE_001");
+        if (state.selectedSessionId) {
+            url.searchParams.set("sessionId", state.selectedSessionId);
+        }
+        if (state.selectedExecutionId) {
+            url.searchParams.set("executionId", state.selectedExecutionId);
+        }
+        if (state.selectedNodeId) {
+            url.searchParams.set("nodeId", state.selectedNodeId);
+        }
+        url.searchParams.set("mode", state.mode || "live");
+        return url.toString();
+    }
+
+    function syncMissionUrl() {
+        const missionLink = buildMissionLink();
+        window.history.replaceState({}, "", missionLink);
+    }
+
+    function setActionLink(elementId, href) {
+        const element = document.getElementById(elementId);
+        element.href = href || "#";
+        element.setAttribute("aria-disabled", href ? "false" : "true");
+    }
+
+    async function copyMissionLink() {
+        const missionLink = buildMissionLink();
+        try {
+            await navigator.clipboard.writeText(missionLink);
+            traceBridgeStateEl.textContent = "Mission Link 已复制";
+        } catch (error) {
+            traceBridgeStateEl.textContent = "复制失败";
+        }
+    }
+
+    function describeTraceField(label, graph, selectedNode, surfaceMode) {
+        if (label === "Trace ID") {
+            return `当前 execution 通过 ${surfaceMode} 视角关联到同一条 trace。`;
+        }
+        if (label === "Selected Node") {
+            return selectedNode ? `事件流与 service graph 会围绕 ${selectedNode.nodeId} 高亮。` : "当前还没有节点焦点。";
+        }
+        if (label === "Target Agent") {
+            return `Grafana drill-down 会把 ${selectedNode?.targetAgent || graph?.metadata?.routingTargetAgent || "agent"} 作为焦点服务。`;
+        }
+        return "时间窗口会自动覆盖 execution 的启动、完成和审批恢复阶段。";
+    }
+
+    function applyUrlState() {
+        const params = new URLSearchParams(window.location.search);
+        const storeId = params.get("storeId");
+        if (storeId) {
+            state.storeId = storeId;
+            document.getElementById("store-id").value = storeId;
+        }
+        const sessionId = params.get("sessionId");
+        if (sessionId) {
+            state.selectedSessionId = sessionId;
+            document.getElementById("preview-session-id").value = sessionId;
+        }
+        const executionId = params.get("executionId");
+        const nodeId = params.get("nodeId");
+        const mode = params.get("mode");
+        if (nodeId) {
+            state.selectedNodeId = nodeId;
+        }
+        return { executionId, sessionId, mode };
+    }
+
     function escapeHtml(value) {
         return String(value ?? "")
             .replaceAll("&", "&amp;")
@@ -1230,10 +1613,23 @@
         return escapeHtml(value).replaceAll("'", "&#39;");
     }
 
-    refreshDashboard().catch((error) => {
-        console.error(error);
-        graphNoteEl.textContent = "Dashboard 初始化失败，请检查 gateway 是否启动。";
-    });
+    (async function initMissionControl() {
+        try {
+            const { executionId, sessionId, mode } = applyUrlState();
+            await refreshDashboard();
+            if (executionId) {
+                await openExecution(executionId, mode || "live");
+            } else if (sessionId) {
+                await openLatestExecution(sessionId);
+            } else {
+                renderTraceBridge(null, "Live");
+            }
+        } catch (error) {
+            console.error(error);
+            graphNoteEl.textContent = "Dashboard 初始化失败，请检查 gateway 是否启动。";
+            renderTraceBridge(null, "Live");
+        }
+    })();
 </script>
 </body>
 </html>

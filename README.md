@@ -219,13 +219,15 @@ curl http://localhost:8093/actuator/prometheus
 - execution 回放接口：`GET /api/control/executions/{executionId}/replay`。
 - execution 实时流接口：`GET /api/control/executions/{executionId}/stream`（SSE）。
 - 控制面 Dashboard 接口：`GET /api/control/dashboard/overview`。
-- 控制面页面入口：`GET /control/dashboard`，提供 Mission Control DAG、Live Event Rail、Replay Console、审批队列和活跃会话工作台。
+- 控制面页面入口：`GET /control/dashboard`，提供 Mission Control DAG、Trace Bridge、Live Event Rail、Replay Console、审批队列和活跃会话工作台。
 - execution runtime store：`dish-memory` 额外保存 execution graph snapshot、event stream、session 最新 execution 索引，支持历史回放与实时 SSE 共用同一事件模型。
 - 每个微服务都暴露 `/actuator/health`、`/actuator/info`、`/actuator/metrics`、`/actuator/prometheus`，可直接接入 Prometheus。
 - Gateway 额外输出 execution runtime 指标：执行启动、结果状态、节点状态切换、节点延迟、审批决策、SSE 订阅数。
 - Gateway 关键执行链路额外产出手工 span：`gateway.step.dispatch`、`gateway.step.resume`，方便在 Trace 里直接看到节点级状态流转。
 - Dubbo Provider 统一通过 `DubboOpenTelemetrySupport` 从 RPC attachment 恢复父上下文，保证 `gateway -> planner/policy/memory/agent` trace 不断链。
 - 本地观测栈资源位于 `ops/observability/`，包含 `docker compose`、Prometheus 抓取配置、Grafana starter dashboard、OTLP Collector 和 Tempo。
+- Mission Control 页面会为当前 execution / node 生成 Grafana deep link，并把 `traceId`、`executionId`、`targetAgent`、`focusService` 和时间窗同步到 Grafana Dashboard variables。
+- Grafana `dish-agent-mission-control` dashboard 额外提供 `Trace Bridge Context`、`Trace Drill-Down` 和 `Service Graph Map` 面板，方便把 DAG、指标和 trace 串成一条演示链路。
 - trace 传播规范统一为：HTTP 头 `X-Trace-Id`，Dubbo attachment `traceId`，日志 MDC 键 `traceId`。
 - 默认 OTLP 上报端点为 `http://localhost:4318/v1/traces`；本地启动 `ops/observability/docker-compose.yml` 后即可直接在 Grafana 中联查指标和 Trace。
 - 独立契约层：新增 `dish-control-api`，网关不再直接依赖 planner/policy/memory 实现模块。
