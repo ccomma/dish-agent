@@ -31,6 +31,10 @@ import java.util.UUID;
 import static com.example.dish.gateway.config.TraceIdFilter.TRACE_HEADER;
 import static org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE;
 
+/**
+ * 控制面 API 控制器。
+ * 对外暴露编排预览、记忆查询、execution graph/replay/stream、审批查询与决策、Dashboard 总览等入口。
+ */
 @RestController
 @RequestMapping("/api/control")
 public class ControlPlaneController {
@@ -48,6 +52,7 @@ public class ControlPlaneController {
 
     @PostMapping("/plan-preview")
     public PlanPreviewResponse previewPlan(@RequestBody PlanPreviewRequest request, HttpServletRequest httpServletRequest) {
+        // 1. 归一化 sessionId、storeId 和 traceId，保证预览接口独立可用。
         String sessionId = request.getSessionId() != null && !request.getSessionId().isBlank()
                 ? request.getSessionId()
                 : "SESSION_PREVIEW_" + UUID.randomUUID().toString().substring(0, 8);
@@ -55,6 +60,7 @@ public class ControlPlaneController {
                 ? request.getStoreId()
                 : httpServletRequest.getHeader(STORE_HEADER);
         String traceId = resolveTraceId(httpServletRequest.getHeader(TRACE_HEADER));
+        // 2. 复用 RoutingAgent + OrchestrationControlService 生成控制面预览。
         RoutingDecision routing = routingAgent.route(request.getMessage(), sessionId, storeId, null);
         return orchestrationControlService.preview(routing, traceId);
     }
@@ -102,6 +108,7 @@ public class ControlPlaneController {
 
     @GetMapping(value = "/executions/{executionId}/stream", produces = TEXT_EVENT_STREAM_VALUE)
     public SseEmitter executionStream(@PathVariable String executionId) {
+        // execution stream 直接委托给事件发布器维护 SSE 订阅。
         return executionEventPublisher.subscribe(executionId);
     }
 
@@ -161,6 +168,9 @@ public class ControlPlaneController {
         return "TRC-CTRL-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
+    /**
+     * 编排预览请求体。
+     */
     public static class PlanPreviewRequest {
         private String message;
         private String sessionId;
@@ -191,6 +201,9 @@ public class ControlPlaneController {
         }
     }
 
+    /**
+     * 审批动作请求体。
+     */
     public static class ApprovalDecisionRequest {
         private String decidedBy;
         private String decisionReason;

@@ -124,10 +124,10 @@ public class RAGPipeline {
     private void loadKnowledgeBase() {
         System.out.println("[RAG] 加载知识库...");
 
-        // 加载菜品
+        // 1. 加载菜品知识。
         loadDishes();
 
-        // 加载政策
+        // 2. 加载政策知识。
         loadPolicies();
 
         System.out.println("[RAG] 知识库加载完成，共 " + knowledgeBase.size() + " 个条目");
@@ -304,10 +304,9 @@ public class RAGPipeline {
      * 两阶段检索: 1) 初步 top-5  2) Rerank → top-k
      */
     private String retrieve(String query, int topK) {
-        // 1. 生成查询向量
+        // 1. 生成查询向量并做初步 top-5 检索。
         Embedding queryEmbedding = embeddingService.embed(query);
 
-        // 2. 初步检索 - top 5
         EmbeddingSearchResult<TextSegment> initialResult = embeddingStore.search(
                 EmbeddingSearchRequest.builder()
                         .queryEmbedding(queryEmbedding)
@@ -321,7 +320,7 @@ public class RAGPipeline {
 
         List<TextSegment> finalSegments;
 
-        // 3. Reranking（如果启用）
+        // 2. 如果启用 reranking，则根据相关性重新排序并截断到 top-k。
         if (rerankingEnabled && scoringModel != null && !segments.isEmpty()) {
             Response<List<Double>> scores =
                     scoringModel.scoreAll(segments, query);
@@ -343,12 +342,12 @@ public class RAGPipeline {
             System.out.println("[RAG] Reranking: " + initialResult.matches().size()
                     + " → " + finalSegments.size() + " (top-" + topK + ")");
         } else {
-            // 无 reranking，直接取 top-k
+            // 无 reranking 时直接截断到 top-k。
             finalSegments = segments.stream().limit(topK).toList();
             System.out.println("[RAG] 检索: " + finalSegments.size() + " 个结果");
         }
 
-        // 4. 构建上下文
+        // 3. 把命中的知识片段拼接成生成阶段使用的上下文。
         StringBuilder context = new StringBuilder();
         context.append("【参考信息】\n\n");
 

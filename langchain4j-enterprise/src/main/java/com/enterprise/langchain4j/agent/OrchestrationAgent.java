@@ -76,9 +76,10 @@ public class OrchestrationAgent {
     private AgentResponse dispatch(RoutingDecision routing) {
         AgentContext context = routing.context();
 
+        // 1. 按路由目标选择具体专业 Agent。
         return switch (routing.targetAgent()) {
             case RoutingDecision.TARGET_DISH_KNOWLEDGE -> {
-                // 为菜品知识Agent补充上下文
+                // 2. 菜品知识路径补齐上下文后再交给知识 Agent。
                 AgentContext updatedContext = AgentContext.builder()
                         .sessionId(context.getSessionId())
                         .intent(context.getIntent())
@@ -106,6 +107,7 @@ public class OrchestrationAgent {
      * 处理闲聊类请求（直接对话）
      */
     private AgentResponse handleChat(AgentContext context) {
+        // 闲聊路径直接调用底层 chatModel，不再走额外业务工具。
         String response = chatModel.chat(context.getUserInput());
         return AgentResponse.success(response, "ChatAgent", context);
     }

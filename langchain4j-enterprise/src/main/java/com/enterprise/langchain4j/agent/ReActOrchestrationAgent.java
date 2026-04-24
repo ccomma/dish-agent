@@ -58,7 +58,7 @@ public class ReActOrchestrationAgent {
                 .userInput(userInput)
                 .build();
 
-        // 2. 执行 ReAct 循环
+        // 2. 执行 ReAct 循环：持续做 Thought -> Action -> Observation，直到拿到最终答案。
         while (state.shouldContinue()) {
             state.nextIteration();
             executeReActStep(state, currentContext);
@@ -75,11 +75,11 @@ public class ReActOrchestrationAgent {
      * 执行单个 ReAct 步骤
      */
     private void executeReActStep(ReActState state, AgentContext context) {
-        // 记录思考过程
+        // 1. 先根据当前状态生成 thought。
         String thought = analyzeAndDecide(state, context);
         state.addStep(ReActState.StepType.THOUGHT, thought, "ReActOrchestration");
 
-        // 决定行动
+        // 2. 再决定下一步 action；如果已经可以直接回答，则写入 FINAL 并结束。
         String action = decideAction(state, context);
         if (action.startsWith("FINAL:")) {
             // 最终响应
@@ -89,7 +89,7 @@ public class ReActOrchestrationAgent {
 
         state.addStep(ReActState.StepType.ACTION, action, "ReActOrchestration");
 
-        // 执行行动并观察结果
+        // 3. 执行动作并把结果记录成 observation，供下一轮思考使用。
         String observation = executeAction(state, context, action);
         state.addStep(ReActState.StepType.OBSERVATION, observation, "ReActOrchestration");
     }
@@ -125,7 +125,7 @@ public class ReActOrchestrationAgent {
      * 决定下一步行动
      */
     private String decideAction(ReActState state, AgentContext context) {
-        // 首次迭代，进行路由决策
+        // 1. 首次迭代固定先做路由决策。
         if (state.getCurrentIteration() == 1) {
             return "ROUTE:" + context.getUserInput();
         }
@@ -140,8 +140,7 @@ public class ReActOrchestrationAgent {
             }
         }
 
-        // 判断是否需要多Agent协作
-        // 如果是复杂的菜品问题且涉及多个方面，可能需要多步处理
+        // 2. 再根据最近 observation 和问题复杂度决定是否需要扩展查询。
         IntentType intent = context.getIntent();
         String input = context.getUserInput();
 
@@ -156,7 +155,7 @@ public class ReActOrchestrationAgent {
             }
         }
 
-        // 简单查询，直接返回结果
+        // 3. 简单查询则直接把最近 observation 作为最终答案。
         return "FINAL:" + lastObservation;
     }
 
@@ -165,6 +164,7 @@ public class ReActOrchestrationAgent {
      */
     private String executeAction(ReActState state, AgentContext context, String action) {
         if (action.startsWith("ROUTE:")) {
+            // 1. ROUTE 动作负责调用 RoutingAgent 做一次完整路由。
             String userInput = action.substring(6);
             AgentContext initialContext = AgentContext.builder()
                     .sessionId(state.getSessionId())
@@ -183,7 +183,7 @@ public class ReActOrchestrationAgent {
         }
 
         if (action.startsWith("EXPAND:")) {
-            // 扩展查询处理
+            // 2. EXPAND 动作在这个教学版里先用文本占位，展示“可继续协作”的能力。
             return "已整合多个相关问题，统一给出回答";
         }
 
@@ -194,6 +194,7 @@ public class ReActOrchestrationAgent {
      * 执行路由决策
      */
     private String executeRouting(ReActState state, AgentContext context, RoutingDecision routing) {
+        // 1. 根据路由结果把请求分发给对应专业 Agent。
         AgentResponse response;
 
         switch (routing.targetAgent()) {
@@ -224,6 +225,7 @@ public class ReActOrchestrationAgent {
      * 构建更新后的上下文
      */
     private AgentContext buildContext(AgentContext original, AgentContext fromRouting) {
+        // 把路由阶段抽取出的参数补回当前会话上下文，供下游专业 Agent 使用。
         return AgentContext.builder()
                 .sessionId(original.getSessionId())
                 .intent(original.getIntent())
@@ -239,6 +241,7 @@ public class ReActOrchestrationAgent {
      * 处理闲聊
      */
     private AgentResponse handleChat(AgentContext context) {
+        // 教学单体版的 chat 路径仍然直接调用底层 chatModel。
         String response = chatModel.chat(context.getUserInput());
         return AgentResponse.success(response, "ChatAgent", context);
     }

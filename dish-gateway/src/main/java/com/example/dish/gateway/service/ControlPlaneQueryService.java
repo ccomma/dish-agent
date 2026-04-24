@@ -9,6 +9,9 @@ import com.example.dish.gateway.dto.control.ControlDashboardOverviewResponse;
 import com.example.dish.gateway.dto.control.SessionMemoryRetrievalResponse;
 import com.example.dish.gateway.dto.control.SessionMemoryTimelineResponse;
 
+/**
+ * 控制面查询服务接口。
+ */
 public interface ControlPlaneQueryService {
 
     SessionMemoryTimelineResponse getSessionTimeline(String storeId, String sessionId, String memoryType, String keyword, int limit, String traceId);

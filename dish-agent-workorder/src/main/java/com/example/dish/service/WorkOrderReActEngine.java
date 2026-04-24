@@ -1,16 +1,10 @@
 package com.example.dish.service;
 
 import com.example.dish.common.agent.ReActState;
-import com.example.dish.common.classifier.IntentType;
 import com.example.dish.common.context.AgentContext;
 import com.example.dish.common.react.AbstractReActEngine;
 import com.example.dish.common.react.ReActEngine;
-import com.example.dish.tools.InventoryResult;
-import com.example.dish.tools.InventoryTools;
-import com.example.dish.tools.OrderResult;
-import com.example.dish.tools.OrderTools;
-import com.example.dish.tools.RefundResult;
-import com.example.dish.tools.RefundTools;
+import com.example.dish.service.support.WorkOrderActionFormatter;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
@@ -24,11 +18,7 @@ import java.util.Optional;
 public class WorkOrderReActEngine extends AbstractReActEngine {
 
     @Resource
-    private InventoryTools inventoryTools;
-    @Resource
-    private OrderTools orderTools;
-    @Resource
-    private RefundTools refundTools;
+    private WorkOrderActionFormatter workOrderActionFormatter;
 
     public WorkOrderReActEngine() {
         super(3);
@@ -43,6 +33,7 @@ public class WorkOrderReActEngine extends AbstractReActEngine {
 
     @Override
     protected String think(ReActState state, AgentContext context) {
+        // 根据意图决定本轮应该调用哪个业务工具。
         return switch (context.getIntent()) {
             case QUERY_INVENTORY -> "识别为库存查询，调用库存工具";
             case QUERY_ORDER -> "识别为订单查询，调用订单工具";
@@ -53,11 +44,13 @@ public class WorkOrderReActEngine extends AbstractReActEngine {
 
     @Override
     protected Optional<Action> decideAction(ReActState state, AgentContext context) {
+        // 1. 工单类问题只需要一次工具调用，已经执行过 action 就直接停止。
         boolean hasAction = state.getSteps().stream().anyMatch(step -> step.getType() == ReActState.StepType.ACTION);
         if (hasAction) {
             return Optional.empty();
         }
 
+        // 2. 按意图生成具体工具动作。
         return switch (context.getIntent()) {
             case QUERY_INVENTORY -> Optional.of(new Action("query_inventory",
                     context.getStoreId() + "/" + context.getDishName()));
@@ -69,10 +62,11 @@ public class WorkOrderReActEngine extends AbstractReActEngine {
 
     @Override
     protected ObservationResult executeAction(Action action, AgentContext context) {
+        // 执行动作时直接把工具结果格式化成终态 observation，不再进入多轮推理。
         return switch (action.type()) {
-            case "query_inventory" -> ObservationResult.terminal(formatInventory(context));
-            case "query_order" -> ObservationResult.terminal(formatOrder(context));
-            case "create_refund" -> ObservationResult.terminal(formatRefund(context));
+            case "query_inventory" -> ObservationResult.terminal(workOrderActionFormatter.formatInventory(context));
+            case "query_order" -> ObservationResult.terminal(workOrderActionFormatter.formatOrder(context));
+            case "create_refund" -> ObservationResult.terminal(workOrderActionFormatter.formatRefund(context));
             default -> ObservationResult.terminal("无法处理的操作类型: " + action.type());
         };
     }
@@ -93,58 +87,6 @@ public class WorkOrderReActEngine extends AbstractReActEngine {
     @Override
     protected String getAgentName() {
         return "WorkOrderAgent";
-    }
-
-    private String formatInventory(AgentContext context) {
-        InventoryResult result;
-        if (context.getDishName() != null && !context.getDishName().isEmpty()) {
-            result = inventoryTools.queryInventory(context.getStoreId(), context.getDishName());
-        } else {
-            result = inventoryTools.queryAllInventory(context.getStoreId());
-        }
-
-        if (!result.isSuccess()) {
-            return "查询失败：" + result.getErrorMessage();
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("【库存查询结果】\n");
-        sb.append("门店：").append(result.getStoreId()).append("\n\n");
-        for (InventoryResult.InventoryItem item : result.getItems()) {
-            sb.append("• ").append(item.getDishName())
-                    .append(" - ").append(item.getQuantity()).append("份")
-                    .append(" (").append(item.getStatus()).append(")\n");
-        }
-        return sb.toString();
-    }
-
-    private String formatOrder(AgentContext context) {
-        OrderResult result = orderTools.queryOrderStatus(context.getOrderId());
-        if (!result.isSuccess()) {
-            return "查询失败：" + result.getErrorMessage();
-        }
-        return "【订单查询结果】\n" +
-                "订单号：" + result.getOrderId() + "\n" +
-                "门店：" + result.getStoreId() + "\n" +
-                "商品：" + result.getItems() + "\n" +
-                "状态：" + result.getStatus() + "\n";
-    }
-
-    private String formatRefund(AgentContext context) {
-        RefundResult result = refundTools.createRefundTicket(
-                context.getOrderId(),
-                context.getRefundReason() != null ? context.getRefundReason() : "用户主动申请"
-        );
-        if (!result.isSuccess()) {
-            return "退款申请失败：" + result.getErrorMessage();
-        }
-        return "【退款工单创建成功】\n" +
-                "工单号：" + result.getTicketId() + "\n" +
-                "订单号：" + result.getOrderId() + "\n" +
-                "原因：" + result.getReason() + "\n" +
-                "状态：" + result.getStatus() + "\n" +
-                "创建时间：" + result.getCreateTime() + "\n\n" +
-                "我们将尽快处理您的退款申请，请保持手机畅通。";
     }
 
     public List<String> inventoryHints() {

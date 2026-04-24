@@ -9,6 +9,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
+/**
+ * execution runtime 事件发布接口。
+ */
 public interface ExecutionEventPublisher {
 
     ExecutionGraphViewResult startExecution(RoutingDecision routing, List<AgentExecutionStep> steps, String traceId);

@@ -26,7 +26,8 @@ import java.util.UUID;
 import static com.example.dish.gateway.config.TraceIdFilter.TRACE_HEADER;
 
 /**
- * 聊天控制器 - HTTP 入口
+ * 聊天主链路控制器。
+ * 负责接收用户 HTTP 请求，并串起 routing、planner、policy、agent dispatch、memory summary 和 execution runtime 事件写入。
  */
 @RestController
 @RequestMapping("/api/chat")
@@ -45,14 +46,9 @@ public class ChatController {
     @Resource
     private ExecutionEventPublisher executionEventPublisher;
 
-    /**
-     * 处理聊天请求
-     *
-     * POST /api/chat/process
-     * Body: {"message": "宫保鸡丁是什么菜系？", "sessionId": "可选"}
-     */
     @PostMapping("/process")
     public GatewayResponse process(@RequestBody ChatRequest request, HttpServletRequest httpServletRequest) {
+        // 1. 先校验请求消息，并归一化 sessionId / storeId / traceId。
         String userInput = request.getMessage();
         if (userInput == null || userInput.trim().isEmpty()) {
             GatewayResponse response = new GatewayResponse();
@@ -65,23 +61,20 @@ public class ChatController {
                 ? request.getSessionId()
                 : generateSessionId();
         String requestStoreId = httpServletRequest.getHeader(STORE_HEADER);
-
-        // 1. 路由决策
-        RoutingDecision routing = routingAgent.route(userInput, sessionId, requestStoreId, null);
-        log.info("gateway dispatch: sessionId={}, targetAgent={}, intent={}",
-                routing.context().getSessionId(), routing.targetAgent(), routing.intent());
-
         String traceId = httpServletRequest.getHeader(TRACE_HEADER);
         if (traceId == null || traceId.isBlank()) {
             traceId = "TRC-GW-" + UUID.randomUUID().toString().substring(0, 8);
         }
 
-        // 2. Control Plane: planner -> policy
+        // 2. 通过 RoutingAgent 生成路由决策，再由控制面生成执行步骤和初始 graph。
+        RoutingDecision routing = routingAgent.route(userInput, sessionId, requestStoreId, null);
+        log.info("gateway dispatch: sessionId={}, targetAgent={}, intent={}",
+                routing.context().getSessionId(), routing.targetAgent(), routing.intent());
         List<AgentExecutionStep> plannedSteps = orchestrationControlService.planSteps(routing, traceId);
         ExecutionGraphViewResult graph = executionEventPublisher.startExecution(routing, plannedSteps, traceId);
         Instant executionStartedAt = graph != null && graph.startedAt() != null ? graph.startedAt() : Instant.now();
 
-        // 3. 按步骤执行（当前保持串行模型，但事件模型支持未来并行）
+        // 3. 按步骤串行执行：逐步处理审批、策略阻断、RPC 派发和 runtime 事件写入。
         List<AgentResponse> responses = new ArrayList<>();
         int executedSteps = 0;
         int stepCount = plannedSteps.size();
@@ -225,10 +218,8 @@ public class ChatController {
             return failedResponse;
         }
 
-        // 4. 聚合结果
+        // 4. 所有步骤完成后聚合响应，并写执行摘要/summary 事件。
         GatewayResponse finalResponse = responseAggregator.aggregate(responses, routing);
-
-        // 5. Memory: 写执行摘要
         orchestrationControlService.writeExecutionSummary(
                 routing,
                 executedSteps,
@@ -291,7 +282,7 @@ public class ChatController {
     }
 
     /**
-     * 请求体
+     * 聊天请求体。
      */
     public static class ChatRequest {
         private String message;
@@ -304,7 +295,7 @@ public class ChatController {
     }
 
     /**
-     * 健康响应
+     * 健康检查响应体。
      */
     public static class HealthResponse {
         private final String status;

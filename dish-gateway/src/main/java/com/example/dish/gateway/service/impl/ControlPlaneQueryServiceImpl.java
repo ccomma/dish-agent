@@ -45,6 +45,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 控制面查询服务门面。
+ * 负责把 memory / approval / execution runtime 的 Dubbo 查询结果转换成 gateway 控制台 DTO。
+ */
 @Service
 public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
 
@@ -74,6 +78,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                                                             String keyword,
                                                             int limit,
                                                             String traceId) {
+        // 1. 先向 memory timeline 服务查询会话时间线。
         MemoryTimelineResult result = memoryTimelineService.timeline(new MemoryTimelineRequest(
                 storeId,
                 sessionId,
@@ -85,6 +90,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                 traceId
         ));
 
+        // 2. 再把内部 DTO 转成控制台展示 DTO。
         List<SessionMemoryEntryResponse> entries = result.entries().stream()
                 .map(entry -> new SessionMemoryEntryResponse(
                         entry.memoryType(),
@@ -98,6 +104,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                 ))
                 .toList();
 
+        // 3. 返回带 source 和 total 的控制台响应。
         return new SessionMemoryTimelineResponse(sessionId, storeId, result.source(), result.total(), entries);
     }
 
@@ -108,6 +115,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                                                                String layers,
                                                                int limit,
                                                                String traceId) {
+        // 1. 读取语义召回结果。
         MemoryReadResult result = memoryReadService.read(new MemoryReadRequest(
                 storeId,
                 sessionId,
@@ -117,6 +125,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                 traceId
         ));
 
+        // 2. 转成控制台可直接展示的 hit 结构。
         List<SessionMemoryRetrievalHitResponse> hits = result.hits().stream()
                 .map(hit -> new SessionMemoryRetrievalHitResponse(
                         hit.memoryType(),
@@ -155,6 +164,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
 
     @Override
     public ApprovalTicketViewResponse getApprovalTicket(String storeId, String sessionId, String approvalId, String traceId) {
+        // 审批票据查不到时返回显式 NOT_FOUND，避免前端再猜空值语义。
         ApprovalTicketQueryResult result = approvalTicketService.get(new ApprovalTicketQueryRequest(
                 approvalId,
                 storeId,
@@ -179,6 +189,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
         ApprovalTicket ticket = result.ticket();
         Object targetAgent = ticket.payload().get("targetAgent");
         Object ticketTraceId = ticket.metadata().get("traceId");
+        // 命中后补齐审批状态、targetAgent、trace 等展示字段。
         return new ApprovalTicketViewResponse(
                 ticket.ticketId(),
                 sessionId,
@@ -201,6 +212,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                                                          String decidedBy,
                                                          String decisionReason,
                                                          String traceId) {
+        // 1. 先把审批动作下发给 approval 服务。
         var result = approvalTicketService.decide(new ApprovalTicketDecisionRequest(
                 approvalId,
                 storeId,
@@ -214,6 +226,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
         ApprovalTicket ticket = result != null ? result.ticket() : null;
         if (result != null && result.success() && ticket != null && ticket.executionId() != null) {
             try {
+                // 2. 审批通过则恢复 execution，拒绝则取消剩余步骤。
                 if (action == ApprovalDecisionAction.APPROVE) {
                     executionResumeService.resumeApprovedExecution(storeId, sessionId, ticket.executionId(), traceId);
                 } else {
@@ -230,6 +243,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                         approvalId, ticket.executionId(), action, ex.getMessage(), ex);
             }
         }
+        // 3. 无论成功与否都记录审批指标，并返回控制台响应。
         executionMetricsService.recordApprovalDecision(action, result != null && result.success());
 
         return new ApprovalDecisionResponse(
@@ -248,6 +262,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
 
     @Override
     public ControlDashboardOverviewResponse getDashboardOverview(String storeId, int limit, String traceId) {
+        // 1. 先按租户维度拉取较大的时间线窗口，作为 dashboard 聚合基础数据。
         MemoryTimelineResult result = memoryTimelineService.timeline(new MemoryTimelineRequest(
                 storeId,
                 null,
@@ -265,6 +280,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
         Map<String, DashboardSessionItemResponse> latestSessionMap = new LinkedHashMap<>();
         Map<String, DashboardApprovalItemResponse> latestApprovalMap = new LinkedHashMap<>();
 
+        // 2. 单次遍历时间线，聚合 memory breakdown、最近会话和最近审批项。
         for (MemoryTimelineEntry entry : entries) {
             memoryTypeBreakdown.merge(entry.memoryType(), 1, Integer::sum);
             if (entry.memoryLayer() != null) {
@@ -306,6 +322,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                 .limit(limit > 0 ? limit : 10)
                 .toList();
 
+        // 3. 计算运行中 / 等审批 execution 数，再统一返回 dashboard 总览。
         int runningExecutionCount = (int) activeSessions.stream()
                 .filter(item -> ExecutionNodeStatus.RUNNING.name().equals(item.latestExecutionStatus()))
                 .count();

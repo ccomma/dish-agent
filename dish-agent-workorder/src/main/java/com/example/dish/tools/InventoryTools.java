@@ -6,7 +6,8 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 
 /**
- * 库存查询工具
+ * 库存查询工具。
+ * 这里只做网关到后端适配器的薄封装，避免 ReAct 引擎直接依赖后端网关实现。
  */
 @Component
 public class InventoryTools {

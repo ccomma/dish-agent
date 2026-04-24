@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 
 /**
- * 订单查询工具
+ * 订单查询工具。
  */
 @Component
 public class OrderTools {

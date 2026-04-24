@@ -17,8 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Agent 分发服务
- * 封装对各 Agent 服务的 Dubbo RPC 调用
+ * Agent 分发服务。
+ * 封装 gateway 到各个 Agent provider 的 Dubbo 调用，并在失败时返回降级响应。
  */
 @Service
 public class AgentDispatchServiceImpl implements AgentDispatchService {
@@ -42,6 +42,7 @@ public class AgentDispatchServiceImpl implements AgentDispatchService {
         if (routing == null) {
             throw new IllegalArgumentException("路由决策不能为空");
         }
+        // 单步模式直接按路由目标派发。
         return dispatchToTarget(routing, routing.targetAgent());
     }
 
@@ -50,10 +51,12 @@ public class AgentDispatchServiceImpl implements AgentDispatchService {
         if (routing == null) {
             throw new IllegalArgumentException("路由决策不能为空");
         }
+        // 1. 没有编排步骤时退回单目标派发。
         if (steps == null || steps.isEmpty()) {
             return List.of(dispatch(routing));
         }
 
+        // 2. 逐步派发编排步骤，并保留每步独立响应。
         List<AgentResponse> responses = new ArrayList<>();
         for (AgentExecutionStep step : steps) {
             responses.add(dispatchStep(routing, step));
@@ -73,11 +76,13 @@ public class AgentDispatchServiceImpl implements AgentDispatchService {
     }
 
     private AgentResponse dispatchToTarget(RoutingDecision routing, String targetAgent) {
+        // 1. 先把当前 traceId 附着到 Dubbo attachment，保证下游 provider 能恢复链路。
         DubboTraceContextSupport.attachCurrentTraceId();
 
         String sessionId = routing.context() != null ? routing.context().getSessionId() : null;
 
         try {
+            // 2. 按目标 Agent 选择具体 Dubbo 服务。
             return switch (targetAgent) {
                 case RoutingDecision.TARGET_DISH_KNOWLEDGE ->
                         dishAgentService.answerWithReflection(routing.context().getUserInput(), routing.context());
@@ -87,6 +92,7 @@ public class AgentDispatchServiceImpl implements AgentDispatchService {
                 default -> AgentResponse.failure("未知目标Agent: " + targetAgent, "Gateway", routing.context());
             };
         } catch (Exception ex) {
+            // 3. RPC 失败时记录日志并返回用户可读的降级结果。
             log.error("agent dispatch failed: sessionId={}, targetAgent={}, message={}",
                     sessionId, targetAgent, ex.getMessage(), ex);
             return buildDegradedResponse(targetAgent, routing);

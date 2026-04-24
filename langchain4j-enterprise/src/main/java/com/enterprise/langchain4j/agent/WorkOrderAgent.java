@@ -75,7 +75,7 @@ public class WorkOrderAgent {
     public AgentResponse process(AgentContext context) {
         IntentType intent = context.getIntent();
 
-        // 根据意图类型调用对应工具
+        // 根据意图类型调用对应工具，教学版仍保持单动作直达。
         return switch (intent) {
             case QUERY_INVENTORY -> handleInventoryQuery(context);
             case QUERY_ORDER -> handleOrderQuery(context);
@@ -88,9 +88,11 @@ public class WorkOrderAgent {
      * 处理库存查询
      */
     private AgentResponse handleInventoryQuery(AgentContext context) {
+        // 1. 先归一化门店和菜品参数。
         String storeId = context.getStoreId() != null ? context.getStoreId() : "STORE_001";
         String dishName = context.getDishName();
 
+        // 2. 再根据是否指定菜品决定查单品还是全量库存。
         String result;
         if (dishName != null && !dishName.isEmpty()) {
             result = formatInventoryResult(inventoryTools.queryInventory(storeId, dishName));
@@ -134,6 +136,7 @@ public class WorkOrderAgent {
      * 处理订单查询
      */
     private AgentResponse handleOrderQuery(AgentContext context) {
+        // 1. 缺少订单号时直接给出引导文案。
         String orderId = context.getOrderId();
         if (orderId == null || orderId.isEmpty()) {
             return AgentResponse.failure(
@@ -143,6 +146,7 @@ public class WorkOrderAgent {
             );
         }
 
+        // 2. 命中订单号后调用订单工具并格式化结果。
         String result = formatOrderResult(orderTools.queryOrderStatus(orderId));
         return AgentResponse.success(result, "WorkOrderAgent", context);
     }
@@ -170,6 +174,7 @@ public class WorkOrderAgent {
      * 处理退款申请
      */
     private AgentResponse handleRefundCreation(AgentContext context) {
+        // 1. 先校验订单号并补齐默认退款原因。
         String orderId = context.getOrderId();
         String reason = context.getRefundReason();
 
@@ -185,6 +190,7 @@ public class WorkOrderAgent {
             reason = "用户主动申请退款";
         }
 
+        // 2. 再调用退款工具建单并格式化结果。
         String result = formatRefundResult(refundTools.createRefundTicket(orderId, reason));
         return AgentResponse.success(result, "WorkOrderAgent", context);
     }

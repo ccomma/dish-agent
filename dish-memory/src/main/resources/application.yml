@@ -28,6 +28,7 @@ dubbo:
     timeout: 5000
 
 memory:
+  # bootstrap | redis
   mode: ${MEMORY_MODE:bootstrap}
   retrieval:
     vector-dim: ${MEMORY_VECTOR_DIM:128}

@@ -17,20 +17,14 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 前置路由Agent（网关层）
- *
- * 职责：
- * 1. 接收用户原始输入
- * 2. LLM 识别意图
- * 3. LLM 抽取参数（菜名、订单号、退款原因等）
- * 4. 从 Session 获取店铺ID（多租户隔离）
- * 5. 做出路由决策
+ * 前置路由 Agent。
+ * 负责在 gateway 最前面完成意图识别、参数抽取、租户会话绑定和目标 Agent 选择。
  */
 @Component
 public class RoutingAgent {
     private static final Logger log = LoggerFactory.getLogger(RoutingAgent.class);
 
-    // 意图 -> 目标Agent 映射
+    // 意图 -> 目标 Agent 映射。
     private static final Map<IntentType, String> INTENT_TO_AGENT = Map.of(
         IntentType.GREETING, RoutingDecision.TARGET_CHAT,
         IntentType.GENERAL_CHAT, RoutingDecision.TARGET_CHAT,
@@ -49,24 +43,18 @@ public class RoutingAgent {
     @Resource
     private SessionService sessionService;
 
-    /**
-     * 执行路由决策
-     *
-     * @param userInput 用户输入
-     * @param existingContext 已存在的上下文（用于传递已抽取的参数）
-     * @return 路由决策
-     */
     public RoutingDecision route(String userInput, String sessionId, String requestStoreId, AgentContext existingContext) {
-        // 1. LLM 同时识别意图和抽取参数
+        // 1. 先用 LLM 一次性完成意图识别和关键参数抽取。
         ExtractedData extracted = extractor.extract(userInput);
 
-        // 2. 获取店铺ID（从 Session，多租户隔离）
+        // 2. 再归一化 sessionId，并通过 SessionService 绑定最终 storeId。
         String resolvedSessionId = resolveSessionId(sessionId, existingContext);
         String storeId = sessionService.resolveStoreId(resolvedSessionId, requestStoreId);
 
-        // 3. 构建上下文（合并 LLM 抽取的参数 + Session 中的店铺ID）
+        // 3. 构建 AgentContext，后续 planner、policy、agent provider 都复用这份上下文。
         AgentContext context = buildContext(userInput, extracted, resolvedSessionId, storeId, existingContext);
 
+        // 4. 抽取失败时走安全兜底路径，统一回到 chat agent。
         if (extracted.extractionFailed()) {
             log.warn("routing extraction failed: sessionId={}, storeId={}", resolvedSessionId, storeId);
             AgentExecutionStep safeStep = AgentExecutionStep.builder()
@@ -92,7 +80,7 @@ public class RoutingAgent {
         log.info("routing request: sessionId={}, intent={}, storeId={}",
                 resolvedSessionId, extracted.intent(), storeId);
 
-        // 4. 确定目标Agent
+        // 5. 根据意图映射目标 Agent，并生成最小执行步骤。
         String targetAgent = INTENT_TO_AGENT.getOrDefault(extracted.intent(), RoutingDecision.TARGET_CHAT);
         AgentExecutionStep step = AgentExecutionStep.builder()
                 .stepId("step-1")
@@ -103,7 +91,7 @@ public class RoutingAgent {
                 .metadata(Map.of("intent", extracted.intent().name()))
                 .build();
 
-        // 5. 生成路由决策
+        // 6. 最后返回完整 RoutingDecision，供 gateway 主链路继续编排。
         return RoutingDecision.builder()
                 .intent(extracted.intent())
                 .targetAgent(targetAgent)
@@ -132,7 +120,7 @@ public class RoutingAgent {
     }
 
     /**
-     * 构建上下文
+     * 构建上下文。
      */
     private AgentContext buildContext(String input, ExtractedData extracted,
                                      String sessionId, String storeId, AgentContext existing) {

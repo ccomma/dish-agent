@@ -15,6 +15,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * execution runtime 指标服务。
+ * 统一维护 gateway mission control 相关的 execution、node、approval、stream 指标。
+ */
 @Service
 public class ExecutionMetricsService {
 
@@ -29,6 +33,7 @@ public class ExecutionMetricsService {
 
     public ExecutionMetricsService(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
+        // 启动时先注册当前值型 gauge，后续只更新原子计数器即可。
         Gauge.builder("dish.execution.active", activeExecutions, AtomicInteger::get)
                 .description("Current active executions tracked by gateway mission control")
                 .register(meterRegistry);
@@ -44,6 +49,7 @@ public class ExecutionMetricsService {
     }
 
     public void recordExecutionStarted(ExecutionGraphViewResult graph) {
+        // execution 启动时写入初始状态并累计 started 计数。
         if (graph == null || graph.executionId() == null) {
             return;
         }
@@ -58,6 +64,7 @@ public class ExecutionMetricsService {
     }
 
     public void recordNodeStatus(String executionId, String targetAgent, ExecutionNodeStatus status, long latencyMs) {
+        // 节点级状态变化既影响 execution 总体状态，也会输出 transitions/latency 指标。
         if (status == null) {
             return;
         }
@@ -87,6 +94,7 @@ public class ExecutionMetricsService {
                                        ExecutionNodeStatus status,
                                        long durationMs,
                                        int executedSteps) {
+        // execution summary 到来时统一记录 outcome、duration 和 step count。
         if (graph == null || status == null || graph.executionId() == null) {
             return;
         }
@@ -125,6 +133,7 @@ public class ExecutionMetricsService {
         if (action == null) {
             return;
         }
+        // 审批动作独立统计 approve/reject 的成功率。
         Counter.builder("dish.execution.approval.decisions.total")
                 .description("Approval decisions performed by mission control")
                 .tag("action", action.name())
@@ -137,6 +146,7 @@ public class ExecutionMetricsService {
         if (executionId == null || executionId.isBlank()) {
             return;
         }
+        // 每个 execution 单独维护订阅数，最终汇总成全局 gauge。
         executionSubscribers.merge(executionId, 1, Integer::sum);
         refreshSubscriberGauge();
     }

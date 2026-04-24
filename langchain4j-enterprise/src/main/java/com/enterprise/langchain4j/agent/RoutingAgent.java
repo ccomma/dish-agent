@@ -46,16 +46,16 @@ public class RoutingAgent {
      * 执行路由决策
      */
     public RoutingDecision route(String userInput, AgentContext existingContext) {
-        // 1. 意图识别
+        // 1. 先识别当前用户输入的意图。
         IntentType intent = intentClassifier.classify(userInput);
 
-        // 2. 构建/更新上下文
+        // 2. 再把识别结果和抽取参数回填进上下文。
         AgentContext context = buildContext(userInput, intent, existingContext);
 
-        // 3. 确定目标Agent
+        // 3. 根据意图映射目标 Agent。
         String targetAgent = INTENT_TO_AGENT.getOrDefault(intent, RoutingDecision.TARGET_CHAT);
 
-        // 4. 生成路由决策
+        // 4. 最后生成路由决策返回给编排层。
         return new RoutingDecision(
             intent,
             targetAgent,
@@ -75,7 +75,7 @@ public class RoutingAgent {
             .intent(intent)
             .userInput(input);
 
-        // 根据意图类型抽取对应参数
+        // 按意图类型抽取对应参数，教学版这里仍然使用简单规则抽取。
         switch (intent) {
             case QUERY_INVENTORY -> {
                 builder.storeId(extractStoreId(input));

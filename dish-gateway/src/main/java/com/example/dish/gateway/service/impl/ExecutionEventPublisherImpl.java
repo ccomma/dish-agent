@@ -32,6 +32,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import javax.annotation.Resource;
 
+/**
+ * execution 事件发布器。
+ * 负责初始化 execution graph、向 memory runtime 追加事件，并把事件广播给 SSE 订阅方。
+ */
 @Service
 public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
 
@@ -46,6 +50,7 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
 
     @Override
     public ExecutionGraphViewResult startExecution(RoutingDecision routing, List<AgentExecutionStep> steps, String traceId) {
+        // 1. 为本次执行生成 executionId，并根据步骤列表构造初始 graph。
         String executionId = "exec-" + UUID.randomUUID().toString().substring(0, 8);
         Instant startedAt = Instant.now();
         String sessionId = routing != null && routing.context() != null ? routing.context().getSessionId() : null;
@@ -111,9 +116,11 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
                 0
         );
 
+        // 2. 先把初始 graph 快照持久化，再记录 execution started 指标。
         executionRuntimeWriteService.initialize(new ExecutionGraphSnapshotWriteRequest(storeId, sessionId, graph));
         executionMetricsService.recordExecutionStarted(graph);
 
+        // 3. 最后把每个步骤的 planned 事件补写到 runtime/replay 流里。
         for (int i = 0; i < stepCount; i++) {
             AgentExecutionStep step = steps.get(i);
             publishNodeStatus(graph, step, ExecutionNodeStatus.PENDING, i + 1, stepCount, traceId, "step planned", 0L, null, null);
@@ -137,6 +144,7 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
             return;
         }
 
+        // 1. 组装当前节点事件的 payload 和 metadata。
         Instant occurredAt = Instant.now();
         Map<String, Object> payload = new LinkedHashMap<>();
         if (response != null && response.getContent() != null) {
@@ -166,6 +174,7 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
             }
         }
 
+        // 2. 持久化事件，并同步广播到 SSE 订阅者。
         appendAndBroadcast(graph, new ExecutionEvent(
                 "evt-" + UUID.randomUUID().toString().substring(0, 8),
                 graph.executionId(),
@@ -176,6 +185,7 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
                 Map.copyOf(payload),
                 Map.copyOf(metadata)
         ));
+        // 3. 更新节点级指标。
         executionMetricsService.recordNodeStatus(graph.executionId(), step.targetAgent(), status, latencyMs);
     }
 
@@ -190,6 +200,7 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
             return;
         }
 
+        // execution summary 用特殊 nodeId=__execution__ 标记整条执行链的最终结果。
         Map<String, Object> payload = Map.of(
                 "responseSummary", statusReason != null ? statusReason : "execution completed",
                 "executedSteps", executedSteps
@@ -219,6 +230,7 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
 
     @Override
     public SseEmitter subscribe(String executionId) {
+        // 1. 为 execution 注册新的 SSE 订阅者。
         SseEmitter emitter = new SseEmitter(0L);
         emitters.computeIfAbsent(executionId, ignored -> new CopyOnWriteArrayList<>()).add(emitter);
         executionMetricsService.recordStreamOpened(executionId);
@@ -226,6 +238,7 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
         emitter.onTimeout(() -> removeEmitter(executionId, emitter));
         emitter.onError(ignored -> removeEmitter(executionId, emitter));
         try {
+            // 2. 建立连接后立即发送 connected 事件，方便前端确认订阅成功。
             emitter.send(SseEmitter.event()
                     .name("connected")
                     .data(Map.of("executionId", executionId)));

@@ -1,4 +1,6 @@
-package com.example.dish.memory.service.impl;
+package com.example.dish.memory.support;
+
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -7,12 +9,18 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.Base64;
 
-final class ExecutionRuntimeStorageCodec {
+/**
+ * execution runtime 快照编解码器。
+ */
+public final class ExecutionRuntimeStorageCodec {
 
     private ExecutionRuntimeStorageCodec() {
     }
 
-    static String encode(Object value) {
+    /**
+     * 把运行态快照编码成 Base64 文本，便于作为 Redis value 存储。
+     */
+    public static String encode(Object value) {
         if (value == null) {
             return null;
         }
@@ -28,8 +36,11 @@ final class ExecutionRuntimeStorageCodec {
     }
 
     @SuppressWarnings("unchecked")
-    static <T> T decode(String payload, Class<T> type) {
-        if (payload == null || payload.isBlank()) {
+    /**
+     * 从 Base64 文本还原运行态快照。
+     */
+    public static <T> T decode(String payload, Class<T> type) {
+        if (StringUtils.isBlank(payload)) {
             return null;
         }
         try {

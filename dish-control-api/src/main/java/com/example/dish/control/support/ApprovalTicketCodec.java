@@ -7,12 +7,16 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 审批票据稳定文本编解码器。
+ */
 public final class ApprovalTicketCodec {
 
     private ApprovalTicketCodec() {
     }
 
     public static String encode(ApprovalTicket ticket) {
+        // 1. 先把票据字段按稳定顺序展开。
         Map<String, String> fields = new LinkedHashMap<>();
         put(fields, "ticketId", ticket.ticketId());
         put(fields, "executionId", ticket.executionId());
@@ -30,6 +34,7 @@ public final class ApprovalTicketCodec {
         put(fields, "planId", asString(ticket.payload().get("planId")));
         put(fields, "traceId", asString(ticket.metadata().get("traceId")));
 
+        // 2. 再编码成多行 `key=value` 文本，便于跨模块稳定传输。
         StringBuilder builder = new StringBuilder();
         for (Map.Entry<String, String> entry : fields.entrySet()) {
             if (builder.length() > 0) {
@@ -41,6 +46,7 @@ public final class ApprovalTicketCodec {
     }
 
     public static ApprovalTicket decode(String payload) {
+        // 1. 逐行解析字段，并恢复 payload / metadata map。
         if (payload == null || payload.isBlank()) {
             return null;
         }
@@ -59,6 +65,7 @@ public final class ApprovalTicketCodec {
             return null;
         }
 
+        // 2. 还原成统一 ApprovalTicket 模型。
         return new ApprovalTicket(
                 ticketId,
                 fields.get("executionId"),

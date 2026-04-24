@@ -1,59 +1,35 @@
 package com.example.dish.policy.service.impl;
 
-import com.example.dish.common.classifier.IntentType;
-import com.example.dish.common.runtime.PolicyDecision;
-import com.example.dish.common.telemetry.DubboOpenTelemetrySupport;
+import com.example.dish.common.telemetry.DubboProviderSpan;
 import com.example.dish.control.policy.model.PolicyEvaluationRequest;
 import com.example.dish.control.policy.model.PolicyEvaluationResult;
 import com.example.dish.control.policy.service.PolicyDecisionService;
+import com.example.dish.policy.support.PolicyRuleEngine;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.stereotype.Service;
 
+/**
+ * 策略评估服务门面。
+ * 负责接收评估请求，并把规则判断委托给策略规则引擎。
+ */
 @Service
 @DubboService(interfaceClass = PolicyDecisionService.class, timeout = 8000, retries = 0)
 public class PolicyDecisionServiceImpl implements PolicyDecisionService {
 
+    private final PolicyRuleEngine policyRuleEngine;
+
+    public PolicyDecisionServiceImpl() {
+        this(new PolicyRuleEngine());
+    }
+
+    public PolicyDecisionServiceImpl(PolicyRuleEngine policyRuleEngine) {
+        this.policyRuleEngine = policyRuleEngine;
+    }
+
     @Override
+    @DubboProviderSpan("policy.evaluate")
     public PolicyEvaluationResult evaluate(PolicyEvaluationRequest request) {
-        DubboOpenTelemetrySupport.RpcSpanScope spanScope =
-                DubboOpenTelemetrySupport.openProviderSpan("policy.evaluate", "dish-policy");
-        try (spanScope) {
-            if (request == null || request.node() == null || request.context() == null) {
-                return new PolicyEvaluationResult(
-                        PolicyDecision.deny("policy-v1", "invalid policy request"),
-                        "policy-v1-rule-engine"
-                );
-            }
-
-            if ((request.tenantId() == null || request.tenantId().isBlank()) && "work-order".equals(request.node().target())) {
-                return new PolicyEvaluationResult(
-                        PolicyDecision.deny("policy-v1-tenant", "work-order call requires tenant scope"),
-                        "policy-v1-rule-engine"
-                );
-            }
-
-            if (request.node().requiresApproval()) {
-                return new PolicyEvaluationResult(
-                        PolicyDecision.requireApproval("policy-v1-node-approval", "node marked as requiresApproval", "high"),
-                        "policy-v1-rule-engine"
-                );
-            }
-
-            IntentType intent = request.context().agentContext() != null ? request.context().agentContext().getIntent() : null;
-            if (intent == IntentType.CREATE_REFUND && "work-order".equals(request.node().target())) {
-                return new PolicyEvaluationResult(
-                        PolicyDecision.requireApproval("policy-v1-refund", "refund workflow requires manual approval", "high"),
-                        "policy-v1-rule-engine"
-                );
-            }
-
-            return new PolicyEvaluationResult(
-                    PolicyDecision.allow("policy-v1-default", "rule check passed"),
-                    "policy-v1-rule-engine"
-            );
-        } catch (RuntimeException ex) {
-            spanScope.recordFailure(ex);
-            throw ex;
-        }
+        // 1. 把规则判断交给独立规则引擎，门面自身只保留 RPC 适配职责。
+        return new PolicyEvaluationResult(policyRuleEngine.evaluate(request), "policy-v1-rule-engine");
     }
 }

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 
 /**
- * 退款工单工具
+ * 退款工单工具。
  */
 @Component
 public class RefundTools {

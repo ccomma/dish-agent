@@ -9,6 +9,10 @@ import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
 
+/**
+ * Gateway 执行链路 tracing 支撑。
+ * 统一封装 step 执行与恢复场景下的 span 创建、属性补齐和异常记录。
+ */
 public final class GatewayExecutionTracing {
 
     private GatewayExecutionTracing() {
@@ -19,10 +23,12 @@ public final class GatewayExecutionTracing {
                                               ExecutionGraphViewResult graph,
                                               AgentExecutionStep step,
                                               String traceId) {
+        // 1. 创建 gateway 内部 span。
         Span span = GlobalOpenTelemetry.getTracer("dish-agent-gateway")
                 .spanBuilder(spanName)
                 .setSpanKind(SpanKind.INTERNAL)
                 .startSpan();
+        // 2. 补齐 trace / session / execution / step 等业务属性。
         enrich(span, routing, graph, step, traceId);
         return new SpanScope(span.makeCurrent(), span);
     }
@@ -88,6 +94,7 @@ public final class GatewayExecutionTracing {
             if (throwable == null) {
                 return;
             }
+            // 统一把异常记录到 span，方便 Tempo/Grafana 中直接定位失败原因。
             span.recordException(throwable);
             span.setStatus(StatusCode.ERROR, throwable.getMessage() != null ? throwable.getMessage() : throwable.getClass().getSimpleName());
         }

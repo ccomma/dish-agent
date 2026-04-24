@@ -39,6 +39,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * 控制面编排服务门面。
+ * 负责把 routing 决策接入 planner、policy、memory、approval 等控制面服务，
+ * 并向聊天主链路或控制台提供可执行步骤、审批响应和预览结果。
+ */
 @Service
 public class OrchestrationControlServiceImpl implements OrchestrationControlService {
 
@@ -61,10 +66,12 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
 
     @Override
     public List<AgentExecutionStep> planSteps(RoutingDecision routing, String traceId) {
+        // 1. 缺少路由决策时直接返回空步骤列表。
         if (routing == null) {
             return List.of();
         }
 
+        // 2. 先补齐 memory 召回结果和 trace 元数据，再发给 planner 生成 execution graph。
         enrichRoutingContextWithMemory(routing, traceId);
         attachTraceMetadata(routing, traceId);
 
@@ -81,6 +88,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
             return plannedSteps;
         }
 
+        // 3. planner 没给出步骤时，优先回退已有 executionSteps，再退回单目标 fallback 步骤。
         if (routing.executionSteps() != null && !routing.executionSteps().isEmpty()) {
             return routing.executionSteps();
         }
@@ -103,6 +111,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
             return List.of();
         }
 
+        // 把 planner 产出的节点/边转换为 gateway 执行器认识的 AgentExecutionStep。
         Map<String, List<String>> dependencies = buildDependencies(plan);
         List<AgentExecutionStep> steps = new ArrayList<>();
 
@@ -142,6 +151,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
 
     @Override
     public List<AgentExecutionStep> filterAllowedSteps(List<AgentExecutionStep> steps, RoutingDecision routing, String traceId) {
+        // 1. 对每个步骤独立做策略评估，只保留明确允许执行的步骤。
         if (steps == null || steps.isEmpty()) {
             return List.of();
         }
@@ -161,6 +171,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
 
     @Override
     public AgentExecutionStep findFirstApprovalRequiredStep(List<AgentExecutionStep> steps, RoutingDecision routing, String traceId) {
+        // 顺序扫描步骤，找到第一个要求人工审批的节点。
         if (steps == null || steps.isEmpty()) {
             return null;
         }
@@ -176,6 +187,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
 
     @Override
     public GatewayResponse buildApprovalPendingResponse(RoutingDecision routing, String traceId, String approvalId) {
+        // 将 approvalId 写回 routing metadata，供后续响应聚合和控制台查询复用。
         attachApprovalMetadata(routing, approvalId);
         return buildGatewayResponse(
                 routing,
@@ -212,6 +224,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
 
     @Override
     public PlanPreviewResponse preview(RoutingDecision routing, String traceId) {
+        // 1. 先生成步骤，再逐步评估策略结果，统计审批和阻断数量。
         List<AgentExecutionStep> steps = planSteps(routing, traceId);
         List<StepPolicyPreview> previewSteps = new ArrayList<>();
         int approvalRequiredCount = 0;
@@ -242,6 +255,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
             ));
         }
 
+        // 2. 把 memory 命中、DAG 预览和每步策略结果统一组装成控制台 DTO。
         return new PlanPreviewResponse(
                 traceIdFrom(routing),
                 routing != null && routing.context() != null ? routing.context().getSessionId() : null,
@@ -264,6 +278,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
 
     @Override
     public String createApprovalTicket(RoutingDecision routing, String executionId, AgentExecutionStep step, String traceId) {
+        // 审批票据由 gateway 统一发起，交给 dish-memory 保存闭环状态。
         String approvalId = "APR-" + UUID.randomUUID().toString().substring(0, 8);
         String storeId = routing != null && routing.context() != null ? routing.context().getStoreId() : null;
         String sessionId = routing != null && routing.context() != null ? routing.context().getSessionId() : null;
@@ -335,6 +350,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
     }
 
     private com.example.dish.common.runtime.PolicyDecision evaluatePolicy(AgentExecutionStep step, RoutingDecision routing, String traceId) {
+        // 把 gateway step 重新映射成 policy 服务需要的 node/context 结构。
         ExecutionNode node = new ExecutionNode(
                 step.stepId(),
                 ExecutionNodeType.AGENT_CALL,

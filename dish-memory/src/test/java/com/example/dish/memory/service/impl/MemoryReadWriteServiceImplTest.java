@@ -6,22 +6,39 @@ import com.example.dish.control.memory.model.MemoryReadResult;
 import com.example.dish.control.memory.model.MemoryTimelineRequest;
 import com.example.dish.control.memory.model.MemoryTimelineResult;
 import com.example.dish.control.memory.model.MemoryWriteRequest;
+import com.example.dish.memory.model.MemoryEntry;
+import com.example.dish.memory.storage.MemoryEntryStorage;
+import com.example.dish.memory.storage.LongTermMemoryVectorStore;
+import com.example.dish.memory.storage.MemoryTimelineQueryStorage;
+import com.example.dish.memory.storage.MemoryVectorIndexStorage;
+import com.example.dish.memory.support.MemoryKeySupport;
+import com.example.dish.memory.support.MemoryStorageCodec;
+import com.example.dish.memory.support.MemoryVectorSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 class MemoryReadWriteServiceImplTest {
 
     private LongTermMemoryVectorStore longTermMemoryVectorStore;
+    private MemoryEntryStorage memoryEntryStorage;
 
     @BeforeEach
     void setUp() {
         longTermMemoryVectorStore = new LongTermMemoryVectorStore();
+        memoryEntryStorage = new MemoryEntryStorage();
         longTermMemoryVectorStore.clearForTest();
         ApprovalTicketServiceImpl.clearForTest();
         MemoryReadServiceImpl.clearForTest();
@@ -244,25 +261,149 @@ class MemoryReadWriteServiceImplTest {
         Assertions.assertTrue(result.source().contains("long-term") || result.source().contains("short-term"));
     }
 
+    @Test
+    void shouldEncodeStandaloneMemoryEntryModel() {
+        MemoryEntry entry = new MemoryEntry(
+                "STORE-7-SESSION-7-1",
+                MemoryLayer.SHORT_TERM_SESSION,
+                "execution_summary",
+                "refund approved",
+                Map.of("approved", true, "count", 2L),
+                "trace-7",
+                Instant.parse("2026-04-23T10:00:00Z"),
+                1L,
+                "in-memory-short-term"
+        );
+
+        MemoryEntry decoded = MemoryStorageCodec.decode(MemoryStorageCodec.encode(entry));
+
+        Assertions.assertEquals(entry.entryId(), decoded.entryId());
+        Assertions.assertEquals(entry.memoryLayer(), decoded.memoryLayer());
+        Assertions.assertEquals(entry.memoryType(), decoded.memoryType());
+        Assertions.assertEquals(entry.content(), decoded.content());
+        Assertions.assertEquals(entry.traceId(), decoded.traceId());
+        Assertions.assertEquals(entry.createdAt(), decoded.createdAt());
+        Assertions.assertEquals(entry.sequence(), decoded.sequence());
+        Assertions.assertEquals(entry.storageSource(), decoded.storageSource());
+        Assertions.assertEquals(true, decoded.metadata().get("approved"));
+        Assertions.assertEquals(2L, decoded.metadata().get("count"));
+    }
+
+    @Test
+    void shouldExposeMemoryVectorSupportOutsideServiceImplPackage() {
+        double[] refundVector = MemoryVectorSupport.embed("退款审批", 32);
+        double[] similarVector = MemoryVectorSupport.embed("退款需要审批", 32);
+
+        Assertions.assertEquals(32, refundVector.length);
+        Assertions.assertTrue(MemoryVectorSupport.cosine(refundVector, similarVector) > 0);
+    }
+
+    @Test
+    void shouldUseApacheStringUtilsInsteadOfMemoryTextSupport() {
+        Assertions.assertFalse(Files.exists(Path.of("src/main/java/com/example/dish/memory/support/MemoryTextSupport.java")));
+    }
+
+    @Test
+    void shouldCentralizeMemoryRedisKeys() {
+        Assertions.assertEquals("dish:memory:STORE-1:seq", MemoryKeySupport.memorySeqKey("STORE-1"));
+        Assertions.assertEquals("dish:memory:STORE-1:timeline", MemoryKeySupport.tenantTimelineKey("STORE-1"));
+        Assertions.assertEquals(
+                "dish:memory:STORE-1:session:SESSION-1:timeline",
+                MemoryKeySupport.sessionTimelineKey("STORE-1", "SESSION-1")
+        );
+        Assertions.assertEquals(
+                "dish:memory:STORE-1:session:SESSION-1:approval:APR-1",
+                MemoryKeySupport.approvalKey("STORE-1", "SESSION-1", "APR-1")
+        );
+        Assertions.assertEquals("dish:memory:vector:entry-1", MemoryKeySupport.vectorKey("entry-1"));
+    }
+
+    @Test
+    void shouldKeepStorageOperationsOutOfMemoryReadServiceImplStatics() {
+        Set<String> storageMethodNames = Set.of("append", "queryEntries", "collectRetrievalCandidates", "saveApproval", "loadApproval", "source");
+
+        boolean hasStaticStorageMethod = Arrays.stream(MemoryReadServiceImpl.class.getDeclaredMethods())
+                .filter(method -> storageMethodNames.contains(method.getName()))
+                .anyMatch(method -> Modifier.isStatic(method.getModifiers()));
+
+        Assertions.assertFalse(hasStaticStorageMethod);
+    }
+
+    @Test
+    void shouldMoveRetrievalRankingAndTracingBoilerplateOutOfMemoryReadServiceImpl() {
+        String source = fileContent("src/main/java/com/example/dish/memory/service/impl/MemoryReadServiceImpl.java");
+
+        Assertions.assertFalse(source.contains("record RetrievalCandidate"));
+        Assertions.assertFalse(source.contains("openProviderSpan"));
+        Assertions.assertFalse(source.contains("try (spanScope)"));
+    }
+
+    @Test
+    void shouldKeepRetrievalEngineFocusedOnOrchestration() {
+        String source = fileContent("src/main/java/com/example/dish/memory/retrieval/MemoryRetrievalEngine.java");
+
+        Assertions.assertFalse(source.contains("record RetrievalCandidate"));
+        Assertions.assertFalse(source.contains("private String explain("));
+        Assertions.assertFalse(source.contains("private MemoryRetrievalHit toHit("));
+    }
+
+    @Test
+    void shouldSplitTimelineQueryAndVectorScoringOutOfMemoryEntryStorage() {
+        String storageSource = fileContent("src/main/java/com/example/dish/memory/storage/MemoryEntryStorage.java");
+        String timelineServiceSource = fileContent("src/main/java/com/example/dish/memory/service/impl/MemoryTimelineServiceImpl.java");
+        String retrievalSource = fileContent("src/main/java/com/example/dish/memory/retrieval/MemoryRetrievalEngine.java");
+
+        Assertions.assertFalse(storageSource.contains("public List<MemoryEntry> queryEntries("));
+        Assertions.assertFalse(storageSource.contains("public List<MemoryEntry> collectRetrievalCandidates("));
+        Assertions.assertFalse(storageSource.contains("public double vectorScore("));
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/memory/storage/MemoryTimelineQueryStorage.java")));
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/memory/storage/MemoryVectorIndexStorage.java")));
+        Assertions.assertTrue(timelineServiceSource.contains("MemoryTimelineQueryStorage"));
+        Assertions.assertTrue(retrievalSource.contains("MemoryTimelineQueryStorage"));
+        Assertions.assertTrue(retrievalSource.contains("MemoryVectorIndexStorage"));
+    }
+
     private MemoryWriteServiceImpl newWriteService() throws Exception {
         MemoryWriteServiceImpl service = new MemoryWriteServiceImpl();
         inject(service, "longTermMemoryVectorStore", longTermMemoryVectorStore);
+        inject(service, "memoryEntryStorage", memoryEntryStorage);
         return service;
     }
 
     private MemoryReadServiceImpl newReadService() throws Exception {
         MemoryReadServiceImpl service = new MemoryReadServiceImpl();
-        inject(service, "longTermMemoryVectorStore", longTermMemoryVectorStore);
+        com.example.dish.memory.retrieval.MemoryRetrievalEngine engine = new com.example.dish.memory.retrieval.MemoryRetrievalEngine();
+        MemoryTimelineQueryStorage timelineQueryStorage = new MemoryTimelineQueryStorage();
+        MemoryVectorIndexStorage memoryVectorIndexStorage = new MemoryVectorIndexStorage();
+        inject(engine, "longTermMemoryVectorStore", longTermMemoryVectorStore);
+        inject(timelineQueryStorage, "memoryEntryStorage", memoryEntryStorage);
+        inject(engine, "memoryTimelineQueryStorage", timelineQueryStorage);
+        inject(engine, "memoryVectorIndexStorage", memoryVectorIndexStorage);
+        inject(engine, "memoryRetrievalResultAssembler", new com.example.dish.memory.retrieval.MemoryRetrievalResultAssembler());
+        inject(service, "memoryRetrievalEngine", engine);
         return service;
     }
 
-    private MemoryTimelineServiceImpl newTimelineService() {
-        return new MemoryTimelineServiceImpl();
+    private MemoryTimelineServiceImpl newTimelineService() throws Exception {
+        MemoryTimelineServiceImpl service = new MemoryTimelineServiceImpl();
+        inject(service, "memoryEntryStorage", memoryEntryStorage);
+        MemoryTimelineQueryStorage timelineQueryStorage = new MemoryTimelineQueryStorage();
+        inject(timelineQueryStorage, "memoryEntryStorage", memoryEntryStorage);
+        inject(service, "memoryTimelineQueryStorage", timelineQueryStorage);
+        return service;
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private String fileContent(String path) {
+        try {
+            return Files.readString(Path.of(path));
+        } catch (Exception ex) {
+            throw new AssertionError("failed to read " + path, ex);
+        }
     }
 }

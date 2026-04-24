@@ -6,6 +6,9 @@ import com.example.dish.control.execution.model.ExecutionLatestQueryRequest;
 import com.example.dish.control.execution.model.ExecutionReplayQueryRequest;
 import com.example.dish.control.execution.model.ExecutionReplayResult;
 
+/**
+ * execution runtime 查询服务契约。
+ */
 public interface ExecutionRuntimeReadService {
 
     ExecutionGraphViewResult latest(ExecutionLatestQueryRequest request);

@@ -4,10 +4,10 @@ import com.example.dish.common.classifier.IntentType;
 import com.example.dish.common.context.AgentContext;
 import com.example.dish.common.contract.AgentResponse;
 import com.example.dish.common.react.ReActEngine;
+import com.example.dish.service.support.WorkOrderAgentSupport;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
-import java.util.List;
 
 /**
  * 工单处理 Agent 门面，负责组织上下文并转换 ReAct 结果。
@@ -17,57 +17,38 @@ public class WorkOrderReActAgent {
 
     @Resource
     private WorkOrderReActEngine workOrderReActEngine;
+    @Resource
+    private WorkOrderAgentSupport workOrderAgentSupport;
 
     public AgentResponse process(AgentContext context) {
+        // 1. 统一归一化用户输入，保证 ReAct 引擎始终有可用问题文本。
         String userInput = context.getUserInput() != null ? context.getUserInput() : context.getIntent().name();
         ReActEngine.ReActResult result = workOrderReActEngine.execute(userInput, context);
-        return AgentResponse.builder()
-                .success(result.success())
-                .content(result.finalResponse())
-                .agentName("WorkOrderAgent")
-                .context(context)
-                .followUpHints(hintsByIntent(context.getIntent()))
-                .build();
+        // 2. 按意图选择后续提示并包装成统一 AgentResponse。
+        return workOrderAgentSupport.toResponse(
+                result,
+                context,
+                workOrderAgentSupport.hintsByIntent(
+                        context.getIntent(),
+                        workOrderReActEngine.inventoryHints(),
+                        workOrderReActEngine.orderHints(),
+                        workOrderReActEngine.refundHints()
+                )
+        );
     }
 
     public AgentResponse queryInventory(String storeId, String dishName, String sessionId) {
-        AgentContext ctx = AgentContext.builder()
-                .sessionId(sessionId)
-                .intent(IntentType.QUERY_INVENTORY)
-                .storeId(storeId)
-                .dishName(dishName)
-                .userInput("查询库存")
-                .build();
-        return process(ctx);
+        return process(workOrderAgentSupport.buildContext(
+                sessionId, IntentType.QUERY_INVENTORY, storeId, null, dishName, null, "查询库存"));
     }
 
     public AgentResponse queryOrder(String orderId, String sessionId) {
-        AgentContext ctx = AgentContext.builder()
-                .sessionId(sessionId)
-                .intent(IntentType.QUERY_ORDER)
-                .orderId(orderId)
-                .userInput("查询订单")
-                .build();
-        return process(ctx);
+        return process(workOrderAgentSupport.buildContext(
+                sessionId, IntentType.QUERY_ORDER, null, orderId, null, null, "查询订单"));
     }
 
     public AgentResponse createRefund(String orderId, String reason, String sessionId) {
-        AgentContext ctx = AgentContext.builder()
-                .sessionId(sessionId)
-                .intent(IntentType.CREATE_REFUND)
-                .orderId(orderId)
-                .refundReason(reason)
-                .userInput("申请退款")
-                .build();
-        return process(ctx);
-    }
-
-    private List<String> hintsByIntent(IntentType intent) {
-        return switch (intent) {
-            case QUERY_INVENTORY -> workOrderReActEngine.inventoryHints();
-            case QUERY_ORDER -> workOrderReActEngine.orderHints();
-            case CREATE_REFUND -> workOrderReActEngine.refundHints();
-            default -> List.of("还有其他问题吗？");
-        };
+        return process(workOrderAgentSupport.buildContext(
+                sessionId, IntentType.CREATE_REFUND, null, orderId, null, reason, "申请退款"));
     }
 }

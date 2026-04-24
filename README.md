@@ -2,12 +2,14 @@
 
 基于 **LangChain4j 1.x** 的微服务架构实现，用于餐饮 SaaS 场景的智能客服系统。
 
-**v2.0 新增**：Spring Cloud Alibaba + Dubbo 微服务架构，每个 Agent 可独立部署。
-**v2.1 新增**：Control Plane 微服务群，支持 Planner / Policy / Memory 三层控制平面、独立 `dish-control-api` 契约模块、编排预览、审批闭环、可视化 Dashboard，以及 `Redis + 向量检索` 的长期记忆双层架构。
-**v2.2 新增**：`Redis + Milvus` 真正双层长期记忆、短期/审批/长期知识分层写入策略，以及控制台内置“向量命中分数 + 召回来源解释”可视化。
-**v2.3 新增**：Execution Runtime Store、SSE 实时步骤流、Execution Replay，以及可视化 Mission Control DAG 控制台。
-**v2.4 新增**：`Actuator + Prometheus + Grafana` 观测底座、execution runtime 自定义指标，以及统一 trace 传播规范。
-**v2.5 新增**：`OpenTelemetry + OTLP Collector + Tempo` 分布式追踪链路，Gateway 手工 step spans，以及 Dubbo context 透传。
+本文档面向第一次阅读或准备运行本项目的开发者，重点说明项目是什么、有哪些模块、如何启动、各模块大致负责什么。
+
+- **v2.0 新增**：Spring Cloud Alibaba + Dubbo 微服务架构，每个 Agent 可独立部署。
+- **v2.1 新增**：Control Plane 微服务群，支持 Planner / Policy / Memory 三层控制平面、独立 `dish-control-api` 契约模块、编排预览、审批闭环、可视化 Dashboard，以及 `Redis + 向量检索` 的长期记忆双层架构。
+- **v2.2 新增**：`Redis + Milvus` 真正双层长期记忆、短期/审批/长期知识分层写入策略，以及控制台内置“向量命中分数 + 召回来源解释”可视化。
+- **v2.3 新增**：Execution Runtime Store、SSE 实时步骤流、Execution Replay，以及可视化 Mission Control DAG 控制台。
+- **v2.4 新增**：`Actuator + Prometheus + Grafana` 观测底座、execution runtime 自定义指标，以及统一 trace 传播规范。
+- **v2.5 新增**：`OpenTelemetry + OTLP Collector + Tempo` 分布式追踪链路，Gateway 手工 step spans，以及 Dubbo context 透传。
 
 ## 项目概述
 
@@ -95,6 +97,127 @@ dish-agent/
 ├── langchain4j-demo/                   # 教学演示模块（保留）
 └── langchain4j-enterprise/              # 单体版（保留）
 ```
+
+## 模块目录说明
+
+这一节面向项目阅读者，说明各模块当前的主要目录分工，帮助快速建立代码导航感。更细的实现约束、演进规则和 Agent 执行规范维护在 `AGENTS.md`。
+
+### dish-memory
+
+`dish-memory` 目前主要分为下面几层：
+
+- `com.example.dish.memory.service.impl`
+  - Dubbo Provider 实现入口。
+  - 负责对外暴露记忆、审批、execution runtime 等服务方法。
+
+- `com.example.dish.memory.storage`
+  - 存储访问层。
+  - 负责 Redis / 内存模式下的时间线、审批票据、execution runtime 等数据存取。
+
+- `com.example.dish.memory.retrieval`
+  - 记忆召回层。
+  - 负责候选收集、混合检索、结果排序与召回结果组装。
+
+- `com.example.dish.memory.runtime`
+  - execution runtime 视图层。
+  - 负责根据 event stream 推导 graph、节点状态和耗时等运行态视图。
+
+- `com.example.dish.memory.support`
+  - memory 模块专属支撑类。
+  - 包括 Redis key、memory codec、向量化支持等基础能力。
+
+- `com.example.dish.memory.model`
+  - memory 模块内部模型。
+  - 用于模块内部协作，不直接作为外部 RPC 契约。
+
+### dish-planner
+
+- `com.example.dish.planner.service.impl`
+  - Planner Dubbo Provider 实现入口。
+  - 负责根据意图生成执行节点、依赖边和执行模式。
+
+- `com.example.dish.planner.model`
+  - planner 模块内部模型。
+  - 用于承载规则图构建过程中的内部数据。
+
+### dish-policy
+
+- `com.example.dish.policy.service.impl`
+  - Policy Dubbo Provider 实现入口。
+  - 负责根据节点属性、租户范围和业务意图做策略放行、阻断或审批判断。
+
+- `com.example.dish.policy.model`
+  - policy 模块内部模型。
+  - 用于组织规则评估过程中使用的辅助数据。
+
+### dish-gateway
+
+`dish-gateway` 目前主要分为下面几层：
+
+- `com.example.dish.gateway.controller`
+  - HTTP 入口和控制台入口。
+  - 负责接收聊天请求、控制面查询请求以及页面跳转。
+
+- `com.example.dish.gateway.agent`
+  - 路由决策层。
+  - 负责意图识别和目标 Agent 选择。
+
+- `com.example.dish.gateway.service.impl`
+  - 网关核心编排层。
+  - 负责会话绑定、Agent 派发、控制面查询、审批恢复、execution 事件发布和响应聚合。
+
+- `com.example.dish.gateway.observability`
+  - 网关观测层。
+  - 负责 execution 指标和 tracing 辅助能力。
+
+- `com.example.dish.gateway.support`
+  - 网关内部支撑层。
+  - 负责 execution graph 还原等可复用的轻量支撑逻辑。
+
+- `com.example.dish.gateway.dto`
+  - gateway 对外返回 DTO。
+  - 包括聊天主链路响应和控制台展示 DTO。
+
+### dish-agent-dish
+
+`dish-agent-dish` 目前主要分为下面几层：
+
+- `com.example.dish.service.provider`
+  - Dubbo Provider 门面。
+  - 对外暴露标准问答和带反思重试的问答入口。
+
+- `com.example.dish.service`
+  - Agent 编排层。
+  - 负责 ReAct 执行、上下文补齐和统一响应组装。
+
+- `com.example.dish.rag`
+  - RAG 检索层。
+  - 负责知识预热、向量检索、可选重排和最终回答生成。
+
+### dish-agent-workorder
+
+`dish-agent-workorder` 目前主要分为下面几层：
+
+- `com.example.dish.service`
+  - Dubbo 门面与 ReAct 编排层。
+  - 负责库存、订单、退款等工单场景的上下文构造和动作执行。
+
+- `com.example.dish.tools`
+  - 业务工具层。
+  - 负责库存查询、订单查询、退款建单等动作的统一入口。
+
+- `com.example.dish.tools.backend`
+  - 后端访问适配层。
+  - 负责 mock/http 两种模式下的数据源访问。
+
+### dish-agent-chat
+
+- `com.example.dish.service`
+  - Chat Agent Dubbo Provider 入口。
+  - 负责将简单对话请求交给底层 chatModel，并转换成统一 AgentResponse。
+
+- `com.example.dish.config`
+  - chat 模型相关配置。
 
 ## 快速开始
 

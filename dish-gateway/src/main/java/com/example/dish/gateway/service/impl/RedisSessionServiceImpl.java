@@ -36,6 +36,7 @@ public class RedisSessionServiceImpl implements SessionService {
 
     @Override
     public String resolveStoreId(String sessionId, String requestStoreId) {
+        // 1. 没有 sessionId 时直接按请求头或默认门店返回。
         String incomingStoreId = normalizeStoreId(requestStoreId);
         if (sessionId == null || sessionId.isBlank()) {
             return incomingStoreId != null ? incomingStoreId : defaultStoreId;
@@ -43,6 +44,7 @@ public class RedisSessionServiceImpl implements SessionService {
 
         String redisKey = SESSION_KEY_PREFIX + sessionId;
         try {
+            // 2. 先读取 Redis 中现有绑定，再按冲突策略决定最终 storeId。
             String existingStoreId = redisTemplate.opsForHash().get(redisKey, STORE_ID_FIELD) instanceof String value
                     ? value : null;
             if (existingStoreId != null && incomingStoreId != null && !existingStoreId.equals(incomingStoreId)) {
@@ -61,10 +63,12 @@ public class RedisSessionServiceImpl implements SessionService {
                 incomingStoreId = defaultStoreId;
             }
 
+            // 3. 把最终绑定写回 Redis，并刷新 TTL。
             redisTemplate.opsForHash().put(redisKey, STORE_ID_FIELD, incomingStoreId);
             redisTemplate.expire(redisKey, Duration.ofHours(ttlHours));
             return incomingStoreId;
         } catch (Exception ex) {
+            // 4. Redis 异常时优先保留当前请求里的 storeId，再退回默认门店。
             log.error("redis session resolve failed, fallback to default store: sessionId={}", sessionId, ex);
             return incomingStoreId != null ? incomingStoreId : defaultStoreId;
         }

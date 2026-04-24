@@ -10,9 +10,8 @@ import dev.langchain4j.service.UserMessage;
 import org.springframework.stereotype.Component;
 
 /**
- * 意图识别 + 参数抽取器实现
- *
- * 使用 LLM 同时识别意图和抽取关键参数
+ * 意图识别 + 参数抽取器。
+ * 使用 LLM 一次性完成意图分类和关键业务参数抽取。
  */
 @Component
 public class IntentAndParameterExtractorImpl implements IntentAndParameterExtractor {
@@ -23,12 +22,10 @@ public class IntentAndParameterExtractorImpl implements IntentAndParameterExtrac
         this.service = AiServices.create(ExtractionService.class, routingChatModel);
     }
 
-    /**
-     * 抽取数据
-     */
     @Override
     public ExtractedData extract(String userInput) {
         try {
+            // 1. 正常路径下让结构化 AI Service 直接返回抽取结果。
             ExtractionResult result = service.extract(userInput);
             return new ExtractedData(
                 result.intent(),
@@ -38,6 +35,7 @@ public class IntentAndParameterExtractorImpl implements IntentAndParameterExtrac
                 false
             );
         } catch (Exception e) {
+            // 2. 失败时退回 UNKNOWN，并显式标记 extractionFailed 方便上层降级。
             System.err.println("意图识别和参数抽取失败: " + e.getMessage());
             return new ExtractedData(IntentType.UNKNOWN, null, null, null, true);
         }

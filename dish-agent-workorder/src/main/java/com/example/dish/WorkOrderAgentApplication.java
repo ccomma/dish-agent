@@ -13,7 +13,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
  * 2. 实现 ReAct 多步推理
  * 3. 通过 Dubbo 对外提供服务
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.example.dish")
 @EnableDiscoveryClient
 @EnableDubbo
 public class WorkOrderAgentApplication {

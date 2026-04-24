@@ -4,6 +4,23 @@
 
 **重要**：每次对项目进行修改后，请检查是否需要同步更新本文件和 README.md，以确保文档与代码保持一致。
 
+## 通用整理流程
+
+跨项目通用的模块整改方法已经沉淀到 skill：
+
+- [engineering-baseline](./.agents/skills/engineering-baseline/SKILL.md)
+
+后续如果要做模块级重构、包分层整理、注释回填、README/AGENTS 边界梳理、通用能力上收，优先遵循这个 skill。
+
+本文件只保留这个仓库的特化落点，不再重复整套跨项目通用方法论。
+
+## 本仓库特化约束
+
+- 注释默认使用中文。
+- 修改代码后，仍需检查是否要同步更新 `README.md` 和 `AGENTS.md`。
+- `README.md` 面向第一次阅读项目的开发者，`AGENTS.md` 面向本仓库内工作的 Agent。
+- 对于本仓库中的核心门面类、编排类、存储适配类、运行态投影类、召回流程类，默认应补中文类注释和必要的 `1、2、3` 步骤注释。
+
 ## 项目概述
 
 这是一个 **LangChain4j 1.x 微服务架构项目**，包含两类模块：
@@ -396,6 +413,67 @@ dish-agent/
 ## 约束
 
 在建议任何命令之前，请先验证该命令是否存在于当前的 Codex 版本中。切勿在未确认已实现的情况下建议 /sessions、/history 或其他命令。
+
+## 模块分层执行约定
+
+本节面向 Agent，说明当前代码整理过程中已经形成的实现边界。README.md 只保留面向阅读者的目录说明，这里保留可执行的约束。
+
+### dish-memory
+
+- `service.impl`
+  - 只保留 Dubbo Provider 门面职责：参数校验、步骤编排、结果返回。
+  - 不再承载 tracing 模板、复杂工具方法、运行态投影、召回排序、存储细节。
+
+- `storage`
+  - 负责 Redis / 内存模式下的数据读写与存储适配。
+  - `MemoryEntryStorage` 以写入职责为主。
+  - 时间线查询与召回候选收集应放在独立查询存储组件中。
+  - 向量缓存与向量分数计算应放在独立向量索引组件中。
+
+- `retrieval`
+  - 负责召回编排、混合检索、结果排序、解释与结果组装。
+  - `MemoryReadServiceImpl` 只能委托该层，不要把召回细节重新塞回门面类。
+
+- `runtime`
+  - 负责 execution runtime 的 graph 投影和状态演算。
+  - 运行态投影器不应再放回 `service.impl`。
+
+- `support`
+  - 只保留 memory 模块强语义支撑，例如 Redis key、memory codec、memory 向量化。
+  - 如果某个支撑类已经不依赖 memory 语义，应优先上收到 `dish-common`。
+
+### dish-planner / dish-policy
+
+- `service.impl`
+  - 只保留 Dubbo Provider 门面职责和规则编排入口。
+  - 可以保留轻量规则判断，但要补清晰的步骤注释，避免把“为什么这样判定”藏进一长串 if/switch。
+
+### dish-agent-dish / dish-agent-workorder / dish-agent-chat
+
+- Provider 门面类
+  - 只负责 Dubbo 对外入口和最小参数整理。
+  - 不要把复杂 ReAct 状态流、RAG 检索细节或后端适配逻辑塞回 Provider。
+
+- Agent/ReAct 类
+  - 负责上下文整理、步骤编排、最终响应转换。
+  - 多步骤方法必须补中文步骤注释，尤其是“第一次检索 -> 反思重试 -> 最终回答”这类链路。
+
+- Tools / RAG / backend
+  - `tools` 只提供业务动作入口，不直接承担门面职责。
+  - `backend` 只负责数据源适配。
+  - `rag` 只负责知识预热、检索、重排、生成，不把 Dubbo 门面逻辑带进来。
+
+### dish-gateway
+
+- `controller`
+  - 只保留 HTTP 入参与响应出参处理，不下沉复杂编排细节。
+
+- `service.impl`
+  - 负责会话绑定、路由编排、控制面查询、execution 恢复和响应聚合。
+  - 类内可以保留必要的转换方法，但如果出现大段重复 DTO 组装或 metadata 提取，应优先考虑抽到 `support` 或专门 assembler。
+
+- `observability`
+  - 负责指标和 tracing，不要把业务编排分支塞入观测类。
 
 ## API 探索
 

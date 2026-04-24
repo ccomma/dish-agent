@@ -30,7 +30,7 @@ public class AgentContext implements Serializable {
         this.orderId = builder.orderId;
         this.dishName = builder.dishName;
         this.refundReason = builder.refundReason;
-        this.metadata = builder.metadata != null ? builder.metadata : new HashMap<>();
+        this.metadata = builder.metadata != null ? new HashMap<>(builder.metadata) : new HashMap<>();
     }
 
     public static Builder builder() {
@@ -59,42 +59,15 @@ public class AgentContext implements Serializable {
 
     // Setters (returning new builder for immutable pattern)
     public AgentContext withIntent(IntentType intent) {
-        return builder()
-            .sessionId(this.sessionId)
-            .intent(intent)
-            .userInput(this.userInput)
-            .storeId(this.storeId)
-            .orderId(this.orderId)
-            .dishName(this.dishName)
-            .refundReason(this.refundReason)
-            .metadata(this.metadata)
-            .build();
+        return copyBuilder().intent(intent).build();
     }
 
     public AgentContext withUserInput(String userInput) {
-        return builder()
-            .sessionId(this.sessionId)
-            .intent(this.intent)
-            .userInput(userInput)
-            .storeId(this.storeId)
-            .orderId(this.orderId)
-            .dishName(this.dishName)
-            .refundReason(this.refundReason)
-            .metadata(this.metadata)
-            .build();
+        return copyBuilder().userInput(userInput).build();
     }
 
     public AgentContext withStoreId(String storeId) {
-        return builder()
-            .sessionId(this.sessionId)
-            .intent(this.intent)
-            .userInput(this.userInput)
-            .storeId(storeId)
-            .orderId(this.orderId)
-            .dishName(this.dishName)
-            .refundReason(this.refundReason)
-            .metadata(this.metadata)
-            .build();
+        return copyBuilder().storeId(storeId).build();
     }
 
     @Override
@@ -107,6 +80,21 @@ public class AgentContext implements Serializable {
             ", dishName='" + dishName + '\'' +
             ", refundReason='" + refundReason + '\'' +
             '}';
+    }
+
+    /**
+     * 基于当前上下文复制一份 builder，便于局部覆写字段。
+     */
+    public Builder copyBuilder() {
+        return builder()
+            .sessionId(this.sessionId)
+            .intent(this.intent)
+            .userInput(this.userInput)
+            .storeId(this.storeId)
+            .orderId(this.orderId)
+            .dishName(this.dishName)
+            .refundReason(this.refundReason)
+            .metadata(this.metadata);
     }
 
     public static class Builder {

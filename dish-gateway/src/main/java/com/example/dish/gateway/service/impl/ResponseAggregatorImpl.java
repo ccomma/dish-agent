@@ -11,17 +11,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 结果聚合服务
- * 将多个Agent的响应聚合为最终响应
+ * 结果聚合服务。
+ * 负责把单个或多个 AgentResponse 合并成 gateway 对外返回的统一响应。
  */
 @Service
 public class ResponseAggregatorImpl implements ResponseAggregator {
 
-    /**
-     * 聚合单个Agent的响应
-     */
     @Override
     public GatewayResponse aggregate(AgentResponse response, RoutingDecision routing) {
+        // 单响应场景直接透传主体内容，并补齐 trace / memory / approval 元数据。
         GatewayResponse.GatewayResponseBuilder builder = new GatewayResponse.GatewayResponseBuilder()
                 .success(response.isSuccess())
                 .content(response.getContent())
@@ -45,6 +43,7 @@ public class ResponseAggregatorImpl implements ResponseAggregator {
 
     @Override
     public GatewayResponse aggregate(List<AgentResponse> responses, RoutingDecision routing) {
+        // 1. 没有任何响应时返回统一空编排结果。
         if (responses == null || responses.isEmpty()) {
             GatewayResponse empty = new GatewayResponse();
             empty.setSuccess(false);
@@ -60,6 +59,7 @@ public class ResponseAggregatorImpl implements ResponseAggregator {
         List<String> supportContents = new ArrayList<>();
         boolean allSuccess = true;
 
+        // 2. 以第一个响应作为主响应，其余响应合并为补充信息和 follow-up hints。
         for (int i = 0; i < responses.size(); i++) {
             AgentResponse current = responses.get(i);
             if (!current.isSuccess()) {
@@ -78,6 +78,7 @@ public class ResponseAggregatorImpl implements ResponseAggregator {
             mergedContent = mergedContent + "\n\n补充信息：\n- " + String.join("\n- ", supportContents);
         }
 
+        // 3. 组装最终 gateway 响应。
         GatewayResponse.GatewayResponseBuilder builder = new GatewayResponse.GatewayResponseBuilder()
                 .success(allSuccess)
                 .content(mergedContent)
@@ -99,9 +100,6 @@ public class ResponseAggregatorImpl implements ResponseAggregator {
         return builder.build();
     }
 
-    /**
-     * 聚合响应（简化版）
-     */
     @Override
     public GatewayResponse aggregate(AgentResponse response) {
         return aggregate(response, null);

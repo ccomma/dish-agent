@@ -1,7 +1,5 @@
 package com.example.dish.gateway.service.impl;
 
-import com.example.dish.common.classifier.IntentType;
-import com.example.dish.common.context.AgentContext;
 import com.example.dish.common.contract.AgentExecutionStep;
 import com.example.dish.common.contract.AgentResponse;
 import com.example.dish.common.contract.RoutingDecision;
@@ -14,15 +12,17 @@ import com.example.dish.gateway.service.AgentDispatchService;
 import com.example.dish.gateway.service.ExecutionEventPublisher;
 import com.example.dish.gateway.service.ExecutionResumeService;
 import com.example.dish.gateway.service.OrchestrationControlService;
+import com.example.dish.gateway.support.ExecutionGraphSupport;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
+/**
+ * execution 恢复服务。
+ * 负责在审批通过或拒绝后，根据已持久化的 graph/runtime 状态继续执行或取消剩余步骤。
+ */
 @Service
 public class ExecutionResumeServiceImpl implements ExecutionResumeService {
 
@@ -37,17 +37,21 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
 
     @Resource
     private OrchestrationControlService orchestrationControlService;
+    @Resource
+    private ExecutionGraphSupport executionGraphSupport;
 
     @Override
     public void resumeApprovedExecution(String storeId, String sessionId, String executionId, String traceId) {
+        // 1. 先读取 execution graph，找出当前仍处于 WAITING_APPROVAL/PENDING 的步骤。
         ExecutionGraphViewResult graph = executionRuntimeReadService.graph(new ExecutionGraphQueryRequest(storeId, executionId, traceId));
         if (graph == null) {
             return;
         }
 
-        List<AgentExecutionStep> remaining = reconstructSteps(graph).stream()
+        List<AgentExecutionStep> ordered = executionGraphSupport.reconstructSteps(graph);
+        List<AgentExecutionStep> remaining = ordered.stream()
                 .filter(step -> {
-                    var node = findNode(graph, step.stepId());
+                    var node = executionGraphSupport.findNode(graph, step.stepId());
                     return node != null && (node.status() == ExecutionNodeStatus.WAITING_APPROVAL || node.status() == ExecutionNodeStatus.PENDING);
                 })
                 .toList();
@@ -55,12 +59,12 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
             return;
         }
 
-        RoutingDecision routing = reconstructRouting(graph);
+        RoutingDecision routing = executionGraphSupport.reconstructRouting(graph);
         int executed = 0;
         boolean success = true;
-        int stepCount = reconstructSteps(graph).size();
-        List<AgentExecutionStep> ordered = reconstructSteps(graph);
+        int stepCount = ordered.size();
 
+        // 2. 对剩余步骤按顺序恢复执行，并持续写入运行态事件。
         for (AgentExecutionStep step : remaining) {
             int stepIndex = ordered.indexOf(step) + 1;
             executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.RUNNING, stepIndex, stepCount, traceId, "approval granted, resuming execution", 0L, null, null);
@@ -96,6 +100,7 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
             break;
         }
 
+        // 3. 最后补写 execution summary，保证控制台和指标都能看到恢复后的结果。
         orchestrationControlService.writeExecutionSummary(routing, executed, success, traceId);
         executionEventPublisher.publishExecutionSummary(
                 graph,
@@ -109,15 +114,16 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
 
     @Override
     public void rejectExecution(String storeId, String sessionId, String executionId, String traceId, String reason) {
+        // 审批拒绝时，把等待中的步骤统一标记为 CANCELLED，并写入最终 summary。
         ExecutionGraphViewResult graph = executionRuntimeReadService.graph(new ExecutionGraphQueryRequest(storeId, executionId, traceId));
         if (graph == null) {
             return;
         }
-        List<AgentExecutionStep> steps = reconstructSteps(graph);
+        List<AgentExecutionStep> steps = executionGraphSupport.reconstructSteps(graph);
         int stepCount = steps.size();
         for (int i = 0; i < steps.size(); i++) {
             AgentExecutionStep step = steps.get(i);
-            var node = findNode(graph, step.stepId());
+            var node = executionGraphSupport.findNode(graph, step.stepId());
             if (node == null) {
                 continue;
             }
@@ -125,7 +131,7 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
                 executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.CANCELLED, i + 1, stepCount, traceId, reason, 0L, null, node.approvalId());
             }
         }
-        RoutingDecision routing = reconstructRouting(graph);
+        RoutingDecision routing = executionGraphSupport.reconstructRouting(graph);
         orchestrationControlService.writeExecutionSummary(routing, 0, false, traceId);
         executionEventPublisher.publishExecutionSummary(graph, ExecutionNodeStatus.CANCELLED, traceId, reason, graph.durationMs(), 0);
     }
@@ -138,85 +144,10 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
                                String reason) {
         for (int i = currentStepIndex; i < steps.size(); i++) {
             AgentExecutionStep pending = steps.get(i);
-            var node = findNode(graph, pending.stepId());
+            var node = executionGraphSupport.findNode(graph, pending.stepId());
             if (node != null && node.status() == ExecutionNodeStatus.PENDING) {
                 executionEventPublisher.publishNodeStatus(graph, pending, ExecutionNodeStatus.CANCELLED, i + 1, stepCount, traceId, reason, 0L, null, node.approvalId());
             }
         }
-    }
-
-    private RoutingDecision reconstructRouting(ExecutionGraphViewResult graph) {
-        IntentType intent = graph.intent() != null ? IntentType.valueOf(graph.intent()) : IntentType.GENERAL_CHAT;
-        String userInput = asString(graph.metadata().get("userInput"));
-        AgentContext context = AgentContext.builder()
-                .sessionId(graph.sessionId())
-                .storeId(graph.storeId())
-                .userInput(userInput)
-                .intent(intent)
-                .build();
-        context.getMetadata().put("traceId", graph.traceId());
-
-        return RoutingDecision.builder()
-                .intent(intent)
-                .targetAgent(asString(graph.metadata().get("routingTargetAgent")))
-                .reason("resume-execution")
-                .context(context)
-                .planId(graph.planId())
-                .executionMode(graph.executionMode())
-                .confidence(asDouble(graph.metadata().get("routingConfidence")))
-                .executionSteps(reconstructSteps(graph))
-                .build();
-    }
-
-    private List<AgentExecutionStep> reconstructSteps(ExecutionGraphViewResult graph) {
-        return graph.nodes().stream()
-                .sorted(Comparator.comparingInt(node -> asInt(node.metadata().get("stepIndex"))))
-                .map(node -> AgentExecutionStep.builder()
-                        .stepId(node.nodeId())
-                        .targetAgent(node.targetAgent())
-                        .nodeType(node.nodeType())
-                        .dependsOn(asStringList(node.metadata().get("dependsOn")))
-                        .timeoutMs(asLong(node.metadata().get("timeoutMs")))
-                        .required(true)
-                        .metadata(node.metadata())
-                        .build())
-                .toList();
-    }
-
-    private com.example.dish.control.execution.model.ExecutionNodeView findNode(ExecutionGraphViewResult graph, String nodeId) {
-        return graph.nodes().stream().filter(node -> node.nodeId().equals(nodeId)).findFirst().orElse(null);
-    }
-
-    private String asString(Object value) {
-        return value instanceof String text ? text : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> asStringList(Object value) {
-        if (value instanceof List<?> list) {
-            return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
-        }
-        return List.of();
-    }
-
-    private int asInt(Object value) {
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        return 0;
-    }
-
-    private long asLong(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        return 0L;
-    }
-
-    private double asDouble(Object value) {
-        if (value instanceof Number number) {
-            return number.doubleValue();
-        }
-        return 0.0;
     }
 }

@@ -1,17 +1,26 @@
-package com.example.dish.memory.service.impl;
+package com.example.dish.memory.support;
 
 import com.example.dish.control.memory.model.MemoryLayer;
+import com.example.dish.memory.model.MemoryEntry;
+import org.apache.commons.lang3.StringUtils;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-final class MemoryStorageCodec {
+/**
+ * 记忆时间线 entry 的稳定文本编解码器。
+ */
+public final class MemoryStorageCodec {
 
     private MemoryStorageCodec() {
     }
 
-    static String encode(MemoryReadServiceImpl.MemoryEntry entry) {
+    /**
+     * 把时间线 entry 编码成稳定的文本格式，避免直接依赖 JSON 库版本差异。
+     */
+    public static String encode(MemoryEntry entry) {
+        // 1. 先把固定字段按稳定顺序展开，保证编码结果可读且可预期。
         Map<String, String> fields = new LinkedHashMap<>();
         put(fields, "entryId", entry.entryId());
         put(fields, "memoryLayer", entry.memoryLayer() != null ? entry.memoryLayer().name() : null);
@@ -23,9 +32,10 @@ final class MemoryStorageCodec {
         put(fields, "storageSource", entry.storageSource());
         put(fields, "metadata", encodeMetadata(entry.metadata()));
 
+        // 2. 再把字段逐行拼接成 `key=value` 文本，便于 Redis 和日志调试。
         StringBuilder builder = new StringBuilder();
         for (Map.Entry<String, String> field : fields.entrySet()) {
-            if (builder.length() > 0) {
+            if (!builder.isEmpty()) {
                 builder.append('\n');
             }
             builder.append(field.getKey()).append('=').append(escape(field.getValue()));
@@ -33,11 +43,15 @@ final class MemoryStorageCodec {
         return builder.toString();
     }
 
-    static MemoryReadServiceImpl.MemoryEntry decode(String payload) {
-        if (payload == null || payload.isBlank()) {
+    /**
+     * 从稳定文本格式还原时间线 entry。
+     */
+    public static MemoryEntry decode(String payload) {
+        if (StringUtils.isBlank(payload)) {
             return null;
         }
 
+        // 1. 先按行解析基础字段，并执行转义恢复。
         Map<String, String> fields = new LinkedHashMap<>();
         for (String line : payload.split("\\n")) {
             int idx = line.indexOf('=');
@@ -53,7 +67,8 @@ final class MemoryStorageCodec {
             return null;
         }
 
-        return new MemoryReadServiceImpl.MemoryEntry(
+        // 2. 再把 metadata、时间和枚举字段还原为内部模型。
+        return new MemoryEntry(
                 fields.get("entryId"),
                 parseLayer(fields.get("memoryLayer")),
                 memoryType,
@@ -76,6 +91,7 @@ final class MemoryStorageCodec {
         if (metadata == null || metadata.isEmpty()) {
             return "";
         }
+        // 1. metadata 采用 `key:typeValue` + `|` 分隔，兼顾可读性和基础类型保真。
         StringBuilder builder = new StringBuilder();
         for (Map.Entry<String, Object> entry : metadata.entrySet()) {
             if (builder.length() > 0) {
@@ -90,9 +106,10 @@ final class MemoryStorageCodec {
     }
 
     private static Map<String, Object> decodeMetadata(String payload) {
-        if (payload == null || payload.isBlank()) {
+        if (StringUtils.isBlank(payload)) {
             return Map.of();
         }
+        // 1. 逐字符恢复 metadata token，避免被转义后的 `|`、`\n`、`:` 误切分。
         Map<String, Object> metadata = new LinkedHashMap<>();
         StringBuilder token = new StringBuilder();
         boolean escaping = false;
@@ -114,12 +131,13 @@ final class MemoryStorageCodec {
             }
             token.append(current);
         }
+        // 2. 把最后一个 token 也补充解码，保持和循环内相同行为。
         decodeMetadataToken(token.toString(), metadata);
         return metadata;
     }
 
     private static void decodeMetadataToken(String token, Map<String, Object> metadata) {
-        if (token == null || token.isBlank()) {
+        if (StringUtils.isBlank(token)) {
             return;
         }
         int idx = token.indexOf(':');
@@ -156,21 +174,21 @@ final class MemoryStorageCodec {
     }
 
     private static Instant parseInstant(String value) {
-        if (value == null || value.isBlank()) {
+        if (StringUtils.isBlank(value)) {
             return Instant.now();
         }
         return Instant.parse(value);
     }
 
     private static MemoryLayer parseLayer(String value) {
-        if (value == null || value.isBlank()) {
+        if (StringUtils.isBlank(value)) {
             return MemoryLayer.SHORT_TERM_SESSION;
         }
         return MemoryLayer.valueOf(value);
     }
 
     private static long parseLong(String value) {
-        if (value == null || value.isBlank()) {
+        if (StringUtils.isBlank(value)) {
             return 0L;
         }
         return Long.parseLong(value);

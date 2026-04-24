@@ -85,10 +85,10 @@ public class DishKnowledgeAgent {
      */
     public AgentResponse answer(String userQuestion, AgentContext context) {
         try {
-            // 1. 使用RAG管道检索+生成
+            // 1. 通过 RAG 管道完成检索和回答生成。
             String answer = ragPipeline.answer(userQuestion);
 
-            // 2. 构建响应（附带后续操作提示）
+            // 2. 再补充 follow-up hints，构造统一 AgentResponse。
             List<String> hints = generateFollowUpHints(context.getIntent());
 
             return AgentResponse.builder()
@@ -119,12 +119,12 @@ public class DishKnowledgeAgent {
      */
     public AgentResponse answerWithReflection(String userQuestion, AgentContext context, ReActState state) {
         try {
-            // 1. 首次 RAG 检索
+            // 1. 首次 RAG 检索。
             String initialAnswer = ragPipeline.answer(userQuestion);
             state.addStep(ReActState.StepType.OBSERVATION,
                     "首次RAG检索完成", "DishKnowledgeAgent");
 
-            // 2. 自反思：评估结果是否充分
+            // 2. 自反思：评估结果是否充分。
             boolean isSufficient = reflectOnResult(initialAnswer, userQuestion);
 
             String finalAnswer;
@@ -136,13 +136,13 @@ public class DishKnowledgeAgent {
                 state.addStep(ReActState.StepType.THOUGHT,
                         "检索结果不充分，进行补充检索", "DishKnowledgeAgent");
 
-                // 3. 补充检索（使用更广泛的查询）
+                // 3. 补充检索：扩写 query 再检索一次。
                 String expandedQuery = expandQuery(userQuestion);
                 String expandedAnswer = ragPipeline.answer(expandedQuery);
                 state.addStep(ReActState.StepType.OBSERVATION,
                         "补充检索完成", "DishKnowledgeAgent");
 
-                // 4. 整合结果
+                // 4. 整合两次检索结果。
                 finalAnswer = integrateResults(initialAnswer, expandedAnswer);
             }
 
