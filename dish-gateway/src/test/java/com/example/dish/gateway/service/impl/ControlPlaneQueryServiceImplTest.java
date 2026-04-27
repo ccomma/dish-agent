@@ -30,6 +30,7 @@ import com.example.dish.gateway.dto.control.SessionMemoryRetrievalResponse;
 import com.example.dish.gateway.dto.control.SessionMemoryTimelineResponse;
 import com.example.dish.gateway.observability.ExecutionMetricsService;
 import com.example.dish.gateway.service.ExecutionResumeService;
+import com.example.dish.gateway.support.DashboardOverviewAssembler;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -271,6 +272,7 @@ class ControlPlaneQueryServiceImplTest {
     @Test
     void shouldBuildDashboardOverview() throws Exception {
         ControlPlaneQueryServiceImpl service = new ControlPlaneQueryServiceImpl();
+        inject(service, "dashboardOverviewAssembler", new DashboardOverviewAssembler());
         ApprovalTicket pending = new ApprovalTicket(
                 "APR-4001",
                 "trace-4001",

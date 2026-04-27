@@ -1,6 +1,8 @@
 package com.example.dish.common.contract;
 
 import com.example.dish.common.classifier.IntentType;
+import com.example.dish.common.constants.AgentTargets;
+import com.example.dish.common.constants.ExecutionModes;
 import com.example.dish.common.context.AgentContext;
 
 import java.io.Serializable;
@@ -36,7 +38,7 @@ public class RoutingDecision implements Serializable {
                 context,
                 null,
                 targetAgent == null ? Collections.emptyList() : List.of(AgentExecutionStep.singleAgent("step-1", targetAgent, 5000)),
-                "single",
+                ExecutionModes.SINGLE,
                 1.0,
                 Collections.emptyMap()
         );
@@ -65,9 +67,9 @@ public class RoutingDecision implements Serializable {
     /**
      * 预定义的目标Agent常量
      */
-    public static final String TARGET_DISH_KNOWLEDGE = "dish-knowledge";
-    public static final String TARGET_WORK_ORDER = "work-order";
-    public static final String TARGET_CHAT = "chat";
+    public static final String TARGET_DISH_KNOWLEDGE = AgentTargets.DISH_KNOWLEDGE;
+    public static final String TARGET_WORK_ORDER = AgentTargets.WORK_ORDER;
+    public static final String TARGET_CHAT = AgentTargets.CHAT;
 
     public IntentType intent() { return intent; }
 
@@ -132,7 +134,7 @@ public class RoutingDecision implements Serializable {
         private AgentContext context;
         private String planId;
         private List<AgentExecutionStep> executionSteps;
-        private String executionMode = "single";
+        private String executionMode = ExecutionModes.SINGLE;
         private double confidence = 1.0;
         private Map<String, Object> metadata;
 

@@ -28,9 +28,7 @@ public class ChatAgentServiceImpl implements ChatAgentService {
     @DubboProviderSpan("chat-agent.chat")
     public AgentResponse chat(String userInput, String sessionId) {
         // 1. 先构造最小上下文，保证 gateway 能继续沿用统一 AgentResponse 协议。
-        AgentContext context = AgentContext.builder()
-                .sessionId(sessionId)
-                .build();
+        AgentContext context = AgentContext.forSession(sessionId);
 
         // 2. 直接调用底层 chatModel 完成闲聊回复。
         String response = chatModel.chat(userInput);

@@ -32,6 +32,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.List;
 import java.util.Map;
@@ -335,6 +337,17 @@ class OrchestrationControlServiceImplTest {
         Assertions.assertEquals(List.of("n1"), preview.steps().get(1).dependsOn());
     }
 
+    @Test
+    void shouldKeepOrchestrationServiceFocusedOnControlFlow() {
+        String source = fileContent("src/main/java/com/example/dish/gateway/service/impl/OrchestrationControlServiceImpl.java");
+
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/gateway/service/impl/PlanningStepMapper.java")));
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/gateway/service/impl/PlanPreviewAssembler.java")));
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/gateway/service/impl/ExecutionSummaryWriter.java")));
+        Assertions.assertFalse(source.contains("new StepPolicyPreview("));
+        Assertions.assertFalse(source.contains("new MemoryWriteRequest("));
+    }
+
     private OrchestrationControlServiceImpl newService() {
         return new OrchestrationControlServiceImpl();
     }
@@ -343,5 +356,13 @@ class OrchestrationControlServiceImplTest {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private String fileContent(String path) {
+        try {
+            return Files.readString(Path.of(path));
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 }

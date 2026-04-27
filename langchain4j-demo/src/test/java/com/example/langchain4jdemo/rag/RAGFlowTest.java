@@ -33,6 +33,8 @@ class RAGFlowTest {
 
     @BeforeEach
     void setUp() {
+        DemoIntegrationTestSupport.requireEnabled();
+
         Config config = Config.getInstance();
 
         this.embeddingModel = OpenAiEmbeddingModel.builder()

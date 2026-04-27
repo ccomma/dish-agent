@@ -4,44 +4,34 @@ import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.memory.model.MemoryWriteRequest;
 import com.example.dish.memory.model.LongTermMemoryDocument;
 import com.example.dish.memory.model.LongTermMemoryHit;
-import com.example.dish.memory.support.HashEmbeddingModel;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.filter.Filter;
-import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
-import io.milvus.param.MetricType;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
-@Service
 /**
  * 长期记忆向量存储。
  * 这里统一封装长期知识的文档落库、向量检索、Milvus/InMemory 切换和故障回放，
  * 让上层服务只关心“写入长期知识”和“按语义召回长期知识”两个动作。
  */
+@Service
 public class LongTermMemoryVectorStore {
 
     private static final Logger log = LoggerFactory.getLogger(LongTermMemoryVectorStore.class);
@@ -49,6 +39,9 @@ public class LongTermMemoryVectorStore {
 
     private final Map<String, LongTermMemoryDocument> catalog = new ConcurrentHashMap<>();
     private final AtomicBoolean initialized = new AtomicBoolean(false);
+    private final LongTermMemoryDocumentAssembler documentAssembler = new LongTermMemoryDocumentAssembler();
+    private final EmbeddingModelFactory embeddingModelFactory = new EmbeddingModelFactory();
+    private final LongTermEmbeddingStoreFactory embeddingStoreFactory = new LongTermEmbeddingStoreFactory();
 
     @Value("${memory.retrieval.vector-dim:128}")
     private int vectorDim = 128;
@@ -91,7 +84,7 @@ public class LongTermMemoryVectorStore {
 
         // 2. 确保 embedding 模型和向量库已经初始化。
         ensureReady();
-        LongTermMemoryDocument document = toDocument(request);
+        LongTermMemoryDocument document = documentAssembler.toDocument(request);
         catalog.put(document.id(), document);
 
         try {
@@ -153,107 +146,32 @@ public class LongTermMemoryVectorStore {
         return layer.and(tenant);
     }
 
-    private LongTermMemoryHit toHit(EmbeddingMatch<TextSegment> match) {
-        if (match == null || match.embedded() == null) {
-            return null;
-        }
-
-        TextSegment segment = match.embedded();
-        Metadata metadata = segment.metadata();
-        String documentId = match.embeddingId();
-        LongTermMemoryDocument document = documentId != null ? catalog.get(documentId) : null;
-        Map<String, Object> documentMetadata = document != null ? document.metadata() : metadata.toMap();
-
-        return new LongTermMemoryHit(
-                documentId,
-                metadata.getString("memoryType"),
-                MemoryLayer.LONG_TERM_KNOWLEDGE,
-                segment.text(),
-                documentMetadata,
-                metadata.getString("traceId"),
-                parseInstant(metadata.getString("createdAt")),
-                metadata.getLong("sequence") != null ? metadata.getLong("sequence") : 0L,
-                source(),
-                match.score() != null ? match.score() : 0.0
-        );
-    }
-
-    private LongTermMemoryDocument toDocument(MemoryWriteRequest request) {
-        // 1. 为长期知识补齐 tenant、session、trace、sequence 等稳定元数据。
-        Instant now = Instant.now();
-        long sequence = now.toEpochMilli();
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        if (request.metadata() != null) {
-            metadata.putAll(request.metadata());
-        }
-        metadata.put("tenantId", StringUtils.isBlank(request.tenantId()) ? GLOBAL_TENANT : request.tenantId());
-        metadata.put("sessionId", request.sessionId());
-        metadata.put("memoryType", request.memoryType());
-        metadata.put("memoryLayer", request.memoryLayer().name());
-        metadata.put("traceId", request.traceId());
-        metadata.put("createdAt", now.toString());
-        metadata.put("sequence", sequence);
-
-        // 2. 用租户、会话、类型和内容生成稳定文档 ID，避免重复 bootstrap 时出现雪崩式重复写入。
-        String id = UUID.nameUUIDFromBytes((
-                metadata.get("tenantId") + "::" +
-                        request.sessionId() + "::" +
-                        request.memoryType() + "::" +
-                        request.content()
-        ).getBytes(StandardCharsets.UTF_8)).toString();
-
-        return new LongTermMemoryDocument(
-                id,
-                String.valueOf(metadata.get("tenantId")),
-                request.sessionId(),
-                request.memoryType(),
-                request.memoryLayer(),
-                request.content(),
-                Map.copyOf(metadata),
-                request.traceId(),
-                now,
-                sequence
-        );
-    }
-
     private void ensureReady() {
         if (initialized.compareAndSet(false, true)) {
             // 1. 首次使用时按配置初始化 embedding 模型和底层向量库。
-            embeddingModel = buildEmbeddingModel();
-            embeddingStore = buildStore();
+            embeddingModel = embeddingModelFactory.create(
+                    embeddingProvider,
+                    openAiApiKey,
+                    openAiBaseUrl,
+                    openAiModel,
+                    vectorDim
+            );
+            embeddingStore = embeddingStoreFactory.create(
+                    provider,
+                    milvusHost,
+                    milvusPort,
+                    milvusCollection,
+                    vectorDim
+            );
             // 2. 再把内存 catalog 回放到当前 store，保证切换 provider 后仍能查到已写入知识。
             replayCatalog();
         }
     }
 
-    private EmbeddingModel buildEmbeddingModel() {
-        if ("openai".equalsIgnoreCase(embeddingProvider) && StringUtils.isNotBlank(openAiApiKey)) {
-            return OpenAiEmbeddingModel.builder()
-                    .apiKey(openAiApiKey)
-                    .baseUrl(openAiBaseUrl)
-                    .modelName(openAiModel)
-                    .build();
-        }
-        return new HashEmbeddingModel(vectorDim);
-    }
-
-    private EmbeddingStore<TextSegment> buildStore() {
-        if ("milvus".equalsIgnoreCase(provider)) {
-            return MilvusEmbeddingStore.builder()
-                    .host(milvusHost)
-                    .port(milvusPort)
-                    .collectionName(milvusCollection)
-                    .dimension(vectorDim)
-                    .metricType(MetricType.COSINE)
-                    .build();
-        }
-        return new InMemoryEmbeddingStore<>();
-    }
-
     private void fallbackToInMemoryStore() {
         // 1. 故障时强制切到本地内存向量库，避免反复打爆外部依赖。
         provider = "inmemory";
-        embeddingStore = new InMemoryEmbeddingStore<>();
+        embeddingStore = embeddingStoreFactory.createInMemory();
         // 2. 把已有 catalog 全量回放到 fallback store，保证当前进程内已经写入的知识仍可检索。
         replayCatalog();
     }
@@ -272,7 +190,7 @@ public class LongTermMemoryVectorStore {
                 .filter(buildFilter(tenantId))
                 .build();
         return embeddingStore.search(request).matches().stream()
-                .map(this::toHit)
+                .map(match -> documentAssembler.toHit(match, catalog, source()))
                 .filter(Objects::nonNull)
                 .limit(Math.max(limit, 5))
                 .toList();
@@ -295,10 +213,4 @@ public class LongTermMemoryVectorStore {
         embeddingStore.addAll(ids, embeddings, segments);
     }
 
-    private static Instant parseInstant(String value) {
-        if (StringUtils.isBlank(value)) {
-            return Instant.now();
-        }
-        return Instant.parse(value);
-    }
 }

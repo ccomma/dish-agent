@@ -1,26 +1,23 @@
 package com.example.dish.memory.service.impl;
 
 import com.example.dish.common.runtime.ApprovalTicket;
-import com.example.dish.common.runtime.ApprovalTicketStatus;
 import com.example.dish.control.approval.model.ApprovalDecisionAction;
 import com.example.dish.control.approval.model.ApprovalTicketCommandResult;
 import com.example.dish.control.approval.model.ApprovalTicketCreateRequest;
 import com.example.dish.control.approval.model.ApprovalTicketDecisionRequest;
 import com.example.dish.control.approval.model.ApprovalTicketQueryRequest;
 import com.example.dish.control.approval.model.ApprovalTicketQueryResult;
-import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.approval.service.ApprovalTicketService;
-import com.example.dish.control.support.ApprovalTicketCodec;
+import com.example.dish.memory.approval.ApprovalDecisionApplier;
+import com.example.dish.memory.approval.ApprovalTicketAssembler;
+import com.example.dish.memory.approval.ApprovalTimelineWriter;
 import com.example.dish.memory.storage.ApprovalTicketStorage;
 import com.example.dish.memory.storage.MemoryEntryStorage;
-import com.example.dish.common.util.MetadataSupport;
 import com.example.dish.common.telemetry.DubboProviderSpan;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import java.time.Instant;
 
 /**
  * 审批票据服务门面。
@@ -38,6 +35,10 @@ public class ApprovalTicketServiceImpl implements ApprovalTicketService {
     @Autowired
     private ApprovalTicketStorage approvalTicketStorage;
 
+    private final ApprovalTicketAssembler ticketAssembler = new ApprovalTicketAssembler();
+    private final ApprovalDecisionApplier decisionApplier = new ApprovalDecisionApplier();
+    private final ApprovalTimelineWriter timelineWriter = new ApprovalTimelineWriter();
+
     @Override
     @DubboProviderSpan("approval.create")
     public ApprovalTicketCommandResult create(ApprovalTicketCreateRequest request) {
@@ -47,26 +48,7 @@ public class ApprovalTicketServiceImpl implements ApprovalTicketService {
         }
 
         // 2. 生成 PENDING 状态审批票据，并固化执行上下文元数据。
-        ApprovalTicket ticket = new ApprovalTicket(
-                request.approvalId(),
-                request.executionId(),
-                request.nodeId(),
-                ApprovalTicketStatus.PENDING,
-                request.requestedBy(),
-                null,
-                request.decisionReason(),
-                Instant.now(),
-                null,
-                MetadataSupport.mapOfNonNull(
-                        "targetAgent", request.targetAgent(),
-                        "intent", request.intent(),
-                        "sessionId", request.sessionId(),
-                        "storeId", request.tenantId(),
-                        "planId", request.planId(),
-                        "executionId", request.executionId()
-                ),
-                MetadataSupport.mapOfNonNull("traceId", request.traceId())
-        );
+        ApprovalTicket ticket = ticketAssembler.createPending(request);
 
         // 3. 保存票据并追加审批时间线，保证查询和回放都能看到。
         saveTicket(request.tenantId(), request.sessionId(), ticket);
@@ -89,29 +71,12 @@ public class ApprovalTicketServiceImpl implements ApprovalTicketService {
         }
 
         // 3. 根据人工动作生成最终审批状态。
-        ApprovalTicketStatus nextStatus = request.action() == ApprovalDecisionAction.APPROVE
-                ? ApprovalTicketStatus.APPROVED
-                : ApprovalTicketStatus.REJECTED;
+        ApprovalTicket updated = decisionApplier.apply(current, request);
 
-        // 4. 保留原始上下文，补齐决策人、原因和 trace 元数据。
-        ApprovalTicket updated = new ApprovalTicket(
-                current.ticketId(),
-                current.executionId(),
-                current.nodeId(),
-                nextStatus,
-                current.requestedBy(),
-                request.decidedBy(),
-                request.decisionReason(),
-                current.createdAt(),
-                Instant.now(),
-                current.payload(),
-                MetadataSupport.mergeTraceId(current.metadata(), request.traceId())
-        );
-
-        // 5. 覆盖保存票据并追加决策时间线。
+        // 4. 覆盖保存票据并追加决策时间线。
         saveTicket(request.tenantId(), request.sessionId(), updated);
         writeApprovalTimeline(request.tenantId(), request.sessionId(), request.traceId(), updated);
-        return new ApprovalTicketCommandResult(true, updated, nextStatus.name().toLowerCase() + " successfully");
+        return new ApprovalTicketCommandResult(true, updated, updated.status().name().toLowerCase() + " successfully");
     }
 
     @Override
@@ -135,22 +100,7 @@ public class ApprovalTicketServiceImpl implements ApprovalTicketService {
     }
 
     private void writeApprovalTimeline(String tenantId, String sessionId, String traceId, ApprovalTicket ticket) {
-        // 把审批票据写成 APPROVAL 层时间线，供控制台查询和 execution 回放统一复用。
-        memoryEntryStorage.append(
-                tenantId,
-                sessionId,
-                MemoryLayer.APPROVAL,
-                "approval_ticket",
-                ApprovalTicketCodec.encode(ticket),
-                MetadataSupport.mapOfNonNull(
-                        "approvalId", ticket.ticketId(),
-                        "status", ticket.status().name(),
-                        "targetAgent", ticket.payload().get("targetAgent"),
-                        "sessionId", sessionId,
-                        "storeId", tenantId
-                ),
-                traceId
-        );
+        timelineWriter.write(memoryEntryStorage, tenantId, sessionId, traceId, ticket);
     }
 
     private void saveTicket(String tenantId, String sessionId, ApprovalTicket ticket) {

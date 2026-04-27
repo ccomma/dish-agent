@@ -1,6 +1,8 @@
 package com.example.dish.policy.support;
 
 import com.example.dish.common.classifier.IntentType;
+import com.example.dish.common.constants.AgentTargets;
+import com.example.dish.common.constants.PolicyIds;
 import com.example.dish.common.runtime.PolicyDecision;
 import com.example.dish.control.policy.model.PolicyEvaluationRequest;
 import org.springframework.stereotype.Component;
@@ -15,7 +17,7 @@ public class PolicyRuleEngine {
     public PolicyDecision evaluate(PolicyEvaluationRequest request) {
         // 1. 缺少最基本的请求边界时直接拒绝，避免无上下文放行。
         if (request == null || request.node() == null || request.context() == null) {
-            return PolicyDecision.deny("policy-v1", "invalid policy request");
+            return PolicyDecision.deny(PolicyIds.INVALID_REQUEST, "invalid policy request");
         }
 
         // 2. 先检查需要立即拒绝的前置约束。
@@ -31,12 +33,12 @@ public class PolicyRuleEngine {
         }
 
         // 4. 其余场景默认放行。
-        return PolicyDecision.allow("policy-v1-default", "rule check passed");
+        return PolicyDecision.allow(PolicyIds.DEFAULT_ALLOW, "rule check passed");
     }
 
     private PolicyDecision denyDecision(PolicyEvaluationRequest request) {
-        if (!hasTenantScope(request) && "work-order".equals(request.node().target())) {
-            return PolicyDecision.deny("policy-v1-tenant", "work-order call requires tenant scope");
+        if (!hasTenantScope(request) && AgentTargets.WORK_ORDER.equals(request.node().target())) {
+            return PolicyDecision.deny(PolicyIds.TENANT_REQUIRED, "work-order call requires tenant scope");
         }
         return null;
     }
@@ -44,15 +46,15 @@ public class PolicyRuleEngine {
     private PolicyDecision approvalDecision(PolicyEvaluationRequest request) {
         if (request.node().requiresApproval()) {
             return PolicyDecision.requireApproval(
-                    "policy-v1-node-approval",
+                    PolicyIds.NODE_APPROVAL,
                     "node marked as requiresApproval",
                     "high"
             );
         }
 
         IntentType intent = request.context().agentContext() != null ? request.context().agentContext().getIntent() : null;
-        if (intent == IntentType.CREATE_REFUND && "work-order".equals(request.node().target())) {
-            return PolicyDecision.requireApproval("policy-v1-refund", "refund workflow requires manual approval", "high");
+        if (intent == IntentType.CREATE_REFUND && AgentTargets.WORK_ORDER.equals(request.node().target())) {
+            return PolicyDecision.requireApproval(PolicyIds.REFUND_APPROVAL, "refund workflow requires manual approval", "high");
         }
         return null;
     }

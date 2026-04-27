@@ -186,6 +186,9 @@ mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.basics.PromptTemplat
 
 # 基础对话示例
 mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.basics.BasicChatExample" -s settings-test.xml
+
+# RAG/Embedding 外部 API 集成测试（默认单元测试会跳过）
+RUN_LANGCHAIN4J_DEMO_INTEGRATION=true mvn test -pl langchain4j-demo -s settings-test.xml
 ```
 
 ## 项目结构
@@ -349,7 +352,7 @@ dish-agent/
 ## 生产化改造约定（2026-04）
 
 1. **会话与租户**
-- `sessionId` 必须在 `ChatController -> RoutingAgent -> AgentContext` 全链路传递。
+- `sessionId` 必须在 `ChatController -> ChatExecutionService -> RoutingAgent -> AgentContext` 全链路传递。
 - 优先从请求头 `X-Store-Id` 绑定会话店铺，若未提供则使用会话内已有值；首次缺失时回退 `STORE_001`。
 
 2. **可观测性**
@@ -423,12 +426,14 @@ dish-agent/
 - `service.impl`
   - 只保留 Dubbo Provider 门面职责：参数校验、步骤编排、结果返回。
   - 不再承载 tracing 模板、复杂工具方法、运行态投影、召回排序、存储细节。
+  - 审批票据创建、决策应用和时间线写入应委托 `approval` 领域支撑组件，不要重新塞回 Provider 门面。
 
 - `storage`
   - 负责 Redis / 内存模式下的数据读写与存储适配。
   - `MemoryEntryStorage` 以写入职责为主。
   - 时间线查询与召回候选收集应放在独立查询存储组件中。
   - 向量缓存与向量分数计算应放在独立向量索引组件中。
+  - 长期记忆向量存储应保持编排职责，文档装配、EmbeddingModel 构造、Milvus/InMemory store 构造应放在独立组件中。
 
 - `retrieval`
   - 负责召回编排、混合检索、结果排序、解释与结果组装。
@@ -442,11 +447,16 @@ dish-agent/
   - 只保留 memory 模块强语义支撑，例如 Redis key、memory codec、memory 向量化。
   - 如果某个支撑类已经不依赖 memory 语义，应优先上收到 `dish-common`。
 
+- `approval`
+  - 负责审批票据装配、审批决策应用、审批时间线写入。
+  - 不直接承担 Dubbo Provider 职责，也不访问 controller / gateway 层类型。
+
 ### dish-planner / dish-policy
 
 - `service.impl`
   - 只保留 Dubbo Provider 门面职责和规则编排入口。
   - 可以保留轻量规则判断，但要补清晰的步骤注释，避免把“为什么这样判定”藏进一长串 if/switch。
+  - 复杂规则图构建优先放到 `support`，跨模块共享的 targetAgent、executionMode、policyId 文本优先使用 `dish-common` 常量。
 
 ### dish-agent-dish / dish-agent-workorder / dish-agent-chat
 
@@ -457,6 +467,7 @@ dish-agent/
 - Agent/ReAct 类
   - 负责上下文整理、步骤编排、最终响应转换。
   - 多步骤方法必须补中文步骤注释，尤其是“第一次检索 -> 反思重试 -> 最终回答”这类链路。
+  - AgentResponse / AgentContext 的重复装配优先复用 `dish-common` 的静态工厂或 copyBuilder，不要在各 Agent 模块手写字段复制。
 
 - Tools / RAG / backend
   - `tools` 只提供业务动作入口，不直接承担门面职责。
@@ -470,7 +481,10 @@ dish-agent/
 
 - `service.impl`
   - 负责会话绑定、路由编排、控制面查询、execution 恢复和响应聚合。
+  - 聊天主链路执行循环应由 `ChatExecutionService` 承接，Controller 不直接维护 planner/policy/dispatch/runtime event 循环。
+  - 首次执行与审批恢复的 step dispatch/span/latency 模板应复用 `ExecutionStepRunner`，避免新增节点状态时两条链路漏改。
   - 类内可以保留必要的转换方法，但如果出现大段重复 DTO 组装或 metadata 提取，应优先考虑抽到 `support` 或专门 assembler。
+  - Dashboard 总览聚合应放在 `support` 的 assembler 中，查询门面只负责调用 control plane RPC 并补齐必要查询函数。
 
 - `observability`
   - 负责指标和 tracing，不要把业务编排分支塞入观测类。
