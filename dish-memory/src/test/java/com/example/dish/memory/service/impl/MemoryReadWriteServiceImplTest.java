@@ -363,6 +363,18 @@ class MemoryReadWriteServiceImplTest {
         Assertions.assertTrue(retrievalSource.contains("MemoryVectorIndexStorage"));
     }
 
+    @Test
+    void shouldKeepLongTermVectorStoreFocusedOnOrchestration() {
+        String vectorStoreSource = fileContent("src/main/java/com/example/dish/memory/storage/LongTermMemoryVectorStore.java");
+
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/memory/storage/LongTermMemoryDocumentAssembler.java")));
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/memory/storage/EmbeddingModelFactory.java")));
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/memory/storage/LongTermEmbeddingStoreFactory.java")));
+        Assertions.assertFalse(vectorStoreSource.contains("OpenAiEmbeddingModel.builder()"));
+        Assertions.assertFalse(vectorStoreSource.contains("MilvusEmbeddingStore.builder()"));
+        Assertions.assertFalse(vectorStoreSource.contains("new InMemoryEmbeddingStore<>()"));
+    }
+
     private MemoryWriteServiceImpl newWriteService() throws Exception {
         MemoryWriteServiceImpl service = new MemoryWriteServiceImpl();
         inject(service, "longTermMemoryVectorStore", longTermMemoryVectorStore);

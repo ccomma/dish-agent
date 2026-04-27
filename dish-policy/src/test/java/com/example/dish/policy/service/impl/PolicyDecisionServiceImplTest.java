@@ -1,6 +1,7 @@
 package com.example.dish.policy.service.impl;
 
 import com.example.dish.common.classifier.IntentType;
+import com.example.dish.common.constants.AgentTargets;
 import com.example.dish.common.context.AgentContext;
 import com.example.dish.common.runtime.ExecutionContext;
 import com.example.dish.common.runtime.ExecutionNode;
@@ -8,6 +9,7 @@ import com.example.dish.common.runtime.ExecutionNodeType;
 import com.example.dish.common.runtime.PolicyDecisionType;
 import com.example.dish.control.policy.model.PolicyEvaluationRequest;
 import com.example.dish.control.policy.model.PolicyEvaluationResult;
+import com.example.dish.policy.support.PolicyRuleEngine;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +19,7 @@ class PolicyDecisionServiceImplTest {
 
     @Test
     void shouldDenyWhenRequestInvalid() {
-        PolicyDecisionServiceImpl service = new PolicyDecisionServiceImpl();
+        PolicyDecisionServiceImpl service = new PolicyDecisionServiceImpl(new PolicyRuleEngine());
 
         PolicyEvaluationResult result = service.evaluate(null);
 
@@ -26,9 +28,9 @@ class PolicyDecisionServiceImplTest {
 
     @Test
     void shouldDenyWorkOrderWhenTenantMissing() {
-        PolicyDecisionServiceImpl service = new PolicyDecisionServiceImpl();
+        PolicyDecisionServiceImpl service = new PolicyDecisionServiceImpl(new PolicyRuleEngine());
         PolicyEvaluationRequest request = new PolicyEvaluationRequest(
-                node("work-order", false),
+                node(AgentTargets.WORK_ORDER, false),
                 context(IntentType.QUERY_ORDER),
                 null,
                 "trace-1"
@@ -41,9 +43,9 @@ class PolicyDecisionServiceImplTest {
 
     @Test
     void shouldRequireApprovalForRefundWorkflow() {
-        PolicyDecisionServiceImpl service = new PolicyDecisionServiceImpl();
+        PolicyDecisionServiceImpl service = new PolicyDecisionServiceImpl(new PolicyRuleEngine());
         PolicyEvaluationRequest request = new PolicyEvaluationRequest(
-                node("work-order", false),
+                node(AgentTargets.WORK_ORDER, false),
                 context(IntentType.CREATE_REFUND),
                 "STORE-1",
                 "trace-2"
@@ -56,9 +58,9 @@ class PolicyDecisionServiceImplTest {
 
     @Test
     void shouldAllowNormalQueryWithTenant() {
-        PolicyDecisionServiceImpl service = new PolicyDecisionServiceImpl();
+        PolicyDecisionServiceImpl service = new PolicyDecisionServiceImpl(new PolicyRuleEngine());
         PolicyEvaluationRequest request = new PolicyEvaluationRequest(
-                node("work-order", false),
+                node(AgentTargets.WORK_ORDER, false),
                 context(IntentType.QUERY_ORDER),
                 "STORE-1",
                 "trace-3"

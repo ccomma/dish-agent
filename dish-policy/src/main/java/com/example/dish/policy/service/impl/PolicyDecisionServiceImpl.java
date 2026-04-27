@@ -1,5 +1,6 @@
 package com.example.dish.policy.service.impl;
 
+import com.example.dish.common.constants.PolicyIds;
 import com.example.dish.common.telemetry.DubboProviderSpan;
 import com.example.dish.control.policy.model.PolicyEvaluationRequest;
 import com.example.dish.control.policy.model.PolicyEvaluationResult;
@@ -18,10 +19,6 @@ public class PolicyDecisionServiceImpl implements PolicyDecisionService {
 
     private final PolicyRuleEngine policyRuleEngine;
 
-    public PolicyDecisionServiceImpl() {
-        this(new PolicyRuleEngine());
-    }
-
     public PolicyDecisionServiceImpl(PolicyRuleEngine policyRuleEngine) {
         this.policyRuleEngine = policyRuleEngine;
     }
@@ -30,6 +27,6 @@ public class PolicyDecisionServiceImpl implements PolicyDecisionService {
     @DubboProviderSpan("policy.evaluate")
     public PolicyEvaluationResult evaluate(PolicyEvaluationRequest request) {
         // 1. 把规则判断交给独立规则引擎，门面自身只保留 RPC 适配职责。
-        return new PolicyEvaluationResult(policyRuleEngine.evaluate(request), "policy-v1-rule-engine");
+        return new PolicyEvaluationResult(policyRuleEngine.evaluate(request), PolicyIds.RULE_ENGINE_SOURCE);
     }
 }

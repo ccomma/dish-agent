@@ -1,6 +1,8 @@
 package com.example.dish.planner.support;
 
 import com.example.dish.common.classifier.IntentType;
+import com.example.dish.common.constants.AgentTargets;
+import com.example.dish.common.constants.ExecutionModes;
 import com.example.dish.common.runtime.ExecutionEdge;
 import com.example.dish.common.runtime.ExecutionEdgeCondition;
 import com.example.dish.common.runtime.ExecutionNode;
@@ -56,24 +58,24 @@ public class ExecutionPlanFactory {
 
         switch (intent) {
             case GREETING, GENERAL_CHAT, UNKNOWN -> {
-                nodes.add(agentNode("n-chat-1", "chat", 4000, "single"));
-                return new PlanGraph(nodes, edges, "single");
+                nodes.add(agentNode("n-chat-1", AgentTargets.CHAT, 4000, ExecutionModes.SINGLE));
+                return new PlanGraph(nodes, edges, ExecutionModes.SINGLE);
             }
             case DISH_QUESTION, DISH_INGREDIENT, DISH_COOKING_METHOD, POLICY_QUESTION -> {
-                nodes.add(agentNode("n-dish-1", "dish-knowledge", 7000, "serial"));
-                nodes.add(agentNode("n-chat-2", "chat", 4000, "serial"));
+                nodes.add(agentNode("n-dish-1", AgentTargets.DISH_KNOWLEDGE, 7000, ExecutionModes.SERIAL));
+                nodes.add(agentNode("n-chat-2", AgentTargets.CHAT, 4000, ExecutionModes.SERIAL));
                 edges.add(edge("e-dish-chat", "n-dish-1", "n-chat-2", ExecutionEdgeCondition.ON_SUCCESS));
-                return new PlanGraph(nodes, edges, "serial");
+                return new PlanGraph(nodes, edges, ExecutionModes.SERIAL);
             }
             case QUERY_INVENTORY, QUERY_ORDER, CREATE_REFUND -> {
-                nodes.add(agentNode("n-work-1", "work-order", 7000, "serial"));
-                nodes.add(agentNode("n-chat-2", "chat", 4000, "serial"));
+                nodes.add(agentNode("n-work-1", AgentTargets.WORK_ORDER, 7000, ExecutionModes.SERIAL));
+                nodes.add(agentNode("n-chat-2", AgentTargets.CHAT, 4000, ExecutionModes.SERIAL));
                 edges.add(edge("e-work-chat", "n-work-1", "n-chat-2", ExecutionEdgeCondition.ON_SUCCESS));
-                return new PlanGraph(nodes, edges, "serial");
+                return new PlanGraph(nodes, edges, ExecutionModes.SERIAL);
             }
             default -> {
-                nodes.add(agentNode("n-chat-1", "chat", 4000, "single"));
-                return new PlanGraph(nodes, edges, "single");
+                nodes.add(agentNode("n-chat-1", AgentTargets.CHAT, 4000, ExecutionModes.SINGLE));
+                return new PlanGraph(nodes, edges, ExecutionModes.SINGLE);
             }
         }
     }

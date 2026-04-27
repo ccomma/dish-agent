@@ -23,6 +23,8 @@ class EmbeddingModelTest {
 
     @BeforeEach
     void setUp() {
+        DemoIntegrationTestSupport.requireEnabled();
+
         Config config = Config.getInstance();
         this.embeddingModel = OpenAiEmbeddingModel.builder()
                 .apiKey(config.getApiKey())

@@ -19,10 +19,6 @@ public class ExecutionPlannerServiceImpl implements ExecutionPlannerService {
 
     private final ExecutionPlanFactory executionPlanFactory;
 
-    public ExecutionPlannerServiceImpl() {
-        this(new ExecutionPlanFactory());
-    }
-
     public ExecutionPlannerServiceImpl(ExecutionPlanFactory executionPlanFactory) {
         this.executionPlanFactory = executionPlanFactory;
     }

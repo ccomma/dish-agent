@@ -16,13 +16,7 @@ import java.util.List;
 public class WorkOrderAgentSupport {
 
     public AgentResponse toResponse(ReActEngine.ReActResult result, AgentContext context, List<String> followUpHints) {
-        return AgentResponse.builder()
-                .success(result.success())
-                .content(result.finalResponse())
-                .agentName("WorkOrderAgent")
-                .context(context)
-                .followUpHints(followUpHints)
-                .build();
+        return AgentResponse.fromReActResult(result, "WorkOrderAgent", context, followUpHints);
     }
 
     public List<String> hintsByIntent(IntentType intent,
@@ -44,14 +38,6 @@ public class WorkOrderAgentSupport {
                                      String dishName,
                                      String refundReason,
                                      String userInput) {
-        return AgentContext.builder()
-                .sessionId(sessionId)
-                .intent(intent)
-                .storeId(storeId)
-                .orderId(orderId)
-                .dishName(dishName)
-                .refundReason(refundReason)
-                .userInput(userInput)
-                .build();
+        return AgentContext.fromRequest(sessionId, intent, storeId, orderId, dishName, refundReason, userInput);
     }
 }

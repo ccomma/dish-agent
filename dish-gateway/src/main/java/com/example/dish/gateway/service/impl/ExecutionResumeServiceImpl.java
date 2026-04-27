@@ -1,14 +1,11 @@
 package com.example.dish.gateway.service.impl;
 
 import com.example.dish.common.contract.AgentExecutionStep;
-import com.example.dish.common.contract.AgentResponse;
 import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.common.runtime.ExecutionNodeStatus;
 import com.example.dish.control.execution.model.ExecutionGraphQueryRequest;
 import com.example.dish.control.execution.model.ExecutionGraphViewResult;
 import com.example.dish.control.execution.service.ExecutionRuntimeReadService;
-import com.example.dish.gateway.observability.GatewayExecutionTracing;
-import com.example.dish.gateway.service.AgentDispatchService;
 import com.example.dish.gateway.service.ExecutionEventPublisher;
 import com.example.dish.gateway.service.ExecutionResumeService;
 import com.example.dish.gateway.service.OrchestrationControlService;
@@ -30,15 +27,14 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
     private ExecutionRuntimeReadService executionRuntimeReadService;
 
     @Resource
-    private AgentDispatchService agentDispatchService;
-
-    @Resource
     private ExecutionEventPublisher executionEventPublisher;
 
     @Resource
     private OrchestrationControlService orchestrationControlService;
     @Resource
     private ExecutionGraphSupport executionGraphSupport;
+    @Resource
+    private ExecutionStepRunner executionStepRunner;
 
     @Override
     public void resumeApprovedExecution(String storeId, String sessionId, String executionId, String traceId) {
@@ -67,33 +63,24 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
         // 2. 对剩余步骤按顺序恢复执行，并持续写入运行态事件。
         for (AgentExecutionStep step : remaining) {
             int stepIndex = ordered.indexOf(step) + 1;
-            executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.RUNNING, stepIndex, stepCount, traceId, "approval granted, resuming execution", 0L, null, null);
+            ExecutionStepRunner.StepRunResult result = executionStepRunner.run(
+                    graph,
+                    routing,
+                    step,
+                    stepIndex,
+                    stepCount,
+                    traceId,
+                    "gateway.step.resume",
+                    "approval granted, resuming execution"
+            );
 
-            long startedAt = System.currentTimeMillis();
-            AgentResponse response;
-            long latencyMs;
-            try (GatewayExecutionTracing.SpanScope spanScope =
-                         GatewayExecutionTracing.openExecutionSpan("gateway.step.resume", routing, graph, step, traceId)) {
-                try {
-                    response = agentDispatchService.dispatchStep(routing, step);
-                } catch (RuntimeException ex) {
-                    spanScope.recordFailure(ex);
-                    throw ex;
-                }
-                latencyMs = System.currentTimeMillis() - startedAt;
-                spanScope.span().setAttribute("app.step_index", stepIndex);
-                spanScope.span().setAttribute("app.step_count", stepCount);
-                spanScope.span().setAttribute("app.latency_ms", latencyMs);
-                spanScope.span().setAttribute("app.agent_success", response.isSuccess());
-            }
-
-            if (response.isSuccess()) {
-                executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.SUCCEEDED, stepIndex, stepCount, traceId, "step completed after approval", latencyMs, response, null);
+            if (result.response().isSuccess()) {
+                executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.SUCCEEDED, stepIndex, stepCount, traceId, "step completed after approval", result.latencyMs(), result.response(), null);
                 executed++;
                 continue;
             }
 
-            executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.FAILED, stepIndex, stepCount, traceId, "step failed after approval", latencyMs, response, null);
+            executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.FAILED, stepIndex, stepCount, traceId, "step failed after approval", result.latencyMs(), result.response(), null);
             success = false;
             executed++;
             cancelPending(graph, ordered, stepIndex, stepCount, traceId, "downstream cancelled due to upstream failure");

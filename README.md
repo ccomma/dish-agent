@@ -113,6 +113,11 @@ dish-agent/
 - `com.example.dish.memory.storage`
   - 存储访问层。
   - 负责 Redis / 内存模式下的时间线、审批票据、execution runtime 等数据存取。
+  - 长期记忆向量存储在这里按编排、文档装配、模型工厂、底层向量库工厂拆分，避免单个存储类同时承担 Milvus/OpenAI 构造细节。
+
+- `com.example.dish.memory.approval`
+  - 审批领域支撑层。
+  - 负责审批票据装配、人工决策应用和审批时间线写入，Provider 门面只保留校验与编排。
 
 - `com.example.dish.memory.retrieval`
   - 记忆召回层。
@@ -134,21 +139,21 @@ dish-agent/
 
 - `com.example.dish.planner.service.impl`
   - Planner Dubbo Provider 实现入口。
-  - 负责根据意图生成执行节点、依赖边和执行模式。
+  - 只保留 RPC 门面和最小参数编排。
 
-- `com.example.dish.planner.model`
-  - planner 模块内部模型。
-  - 用于承载规则图构建过程中的内部数据。
+- `com.example.dish.planner.support`
+  - planner 规则图工厂层。
+  - 负责根据意图生成执行节点、依赖边和执行模式。
 
 ### dish-policy
 
 - `com.example.dish.policy.service.impl`
   - Policy Dubbo Provider 实现入口。
-  - 负责根据节点属性、租户范围和业务意图做策略放行、阻断或审批判断。
+  - 只保留 RPC 门面和最小参数编排。
 
-- `com.example.dish.policy.model`
-  - policy 模块内部模型。
-  - 用于组织规则评估过程中使用的辅助数据。
+- `com.example.dish.policy.support`
+  - policy 规则判断层。
+  - 负责根据节点属性、租户范围和业务意图做策略放行、阻断或审批判断。
 
 ### dish-gateway
 
@@ -164,7 +169,8 @@ dish-agent/
 
 - `com.example.dish.gateway.service.impl`
   - 网关核心编排层。
-  - 负责会话绑定、Agent 派发、控制面查询、审批恢复、execution 事件发布和响应聚合。
+  - 负责会话绑定、聊天执行协调、Agent 派发、控制面查询、审批恢复、execution 事件发布和响应聚合。
+  - 聊天主链路由 `ChatExecutionServiceImpl` 承接，单步执行模板由 `ExecutionStepRunner` 复用，Controller 不直接维护执行循环。
 
 - `com.example.dish.gateway.observability`
   - 网关观测层。
@@ -172,7 +178,11 @@ dish-agent/
 
 - `com.example.dish.gateway.support`
   - 网关内部支撑层。
-  - 负责 execution graph 还原等可复用的轻量支撑逻辑。
+  - 负责 execution graph 还原、Dashboard 总览聚合等可复用的轻量支撑逻辑。
+
+- `com.example.dish.common`
+  - 跨模块共享契约和轻量工具。
+  - 包含 Agent target / execution mode / policy id 常量，以及 AgentContext / AgentResponse 的常用装配入口。
 
 - `com.example.dish.gateway.dto`
   - gateway 对外返回 DTO。
@@ -236,6 +246,12 @@ mvn clean compile -s settings-test.xml
 
 # 仅编译微服务
 mvn compile -pl dish-common,dish-control-api,dish-memory,dish-planner,dish-policy,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
+```
+
+教学演示模块中的 RAG/Embedding 测试会真实访问外部模型 API，默认 `mvn test` 会跳过这些集成测试。需要验证真实 API 链路时，可显式开启：
+
+```bash
+RUN_LANGCHAIN4J_DEMO_INTEGRATION=true mvn test -pl langchain4j-demo -s settings-test.xml
 ```
 
 ### 3. 启动微服务

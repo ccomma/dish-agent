@@ -3,19 +3,14 @@ package com.example.dish.gateway.service.impl;
 import com.example.dish.common.contract.AgentExecutionStep;
 import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.common.runtime.ExecutionContext;
-import com.example.dish.common.runtime.ExecutionNodeStatus;
 import com.example.dish.common.runtime.ExecutionNode;
 import com.example.dish.common.runtime.ExecutionNodeType;
-import com.example.dish.common.runtime.ExecutionPlan;
 import com.example.dish.common.runtime.PolicyDecisionType;
 import com.example.dish.control.approval.model.ApprovalTicketCreateRequest;
-import com.example.dish.control.execution.model.ExecutionEdgeView;
-import com.example.dish.control.execution.model.ExecutionNodeView;
 import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.approval.service.ApprovalTicketService;
 import com.example.dish.control.memory.model.MemoryReadRequest;
 import com.example.dish.control.memory.model.MemoryReadResult;
-import com.example.dish.control.memory.model.MemoryWriteRequest;
 import com.example.dish.control.memory.service.MemoryReadService;
 import com.example.dish.control.memory.service.MemoryWriteService;
 import com.example.dish.control.planner.model.PlanningRequest;
@@ -25,8 +20,6 @@ import com.example.dish.control.policy.model.PolicyEvaluationRequest;
 import com.example.dish.control.policy.service.PolicyDecisionService;
 import com.example.dish.gateway.dto.GatewayResponse;
 import com.example.dish.gateway.dto.control.PlanPreviewResponse;
-import com.example.dish.gateway.dto.control.SessionMemoryRetrievalHitResponse;
-import com.example.dish.gateway.dto.control.StepPolicyPreview;
 import com.example.dish.gateway.service.OrchestrationControlService;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.slf4j.Logger;
@@ -34,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -64,6 +56,10 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
     @DubboReference(timeout = 5000, retries = 0, check = false)
     private ApprovalTicketService approvalTicketService;
 
+    private final PlanningStepMapper planningStepMapper = new PlanningStepMapper();
+    private final PlanPreviewAssembler planPreviewAssembler = new PlanPreviewAssembler();
+    private final ExecutionSummaryWriter executionSummaryWriter = new ExecutionSummaryWriter();
+
     @Override
     public List<AgentExecutionStep> planSteps(RoutingDecision routing, String traceId) {
         // 1. 缺少路由决策时直接返回空步骤列表。
@@ -83,70 +79,13 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         );
 
         PlanningResult planningResult = executionPlannerService.plan(planningRequest);
-        List<AgentExecutionStep> plannedSteps = toExecutionSteps(planningResult != null ? planningResult.plan() : null);
+        List<AgentExecutionStep> plannedSteps = planningStepMapper.toExecutionSteps(planningResult != null ? planningResult.plan() : null);
         if (!plannedSteps.isEmpty()) {
             return plannedSteps;
         }
 
         // 3. planner 没给出步骤时，优先回退已有 executionSteps，再退回单目标 fallback 步骤。
-        if (routing.executionSteps() != null && !routing.executionSteps().isEmpty()) {
-            return routing.executionSteps();
-        }
-
-        if (routing.targetAgent() == null) {
-            return List.of();
-        }
-
-        return List.of(AgentExecutionStep.builder()
-                .stepId("step-fallback-1")
-                .targetAgent(routing.targetAgent())
-                .nodeType("AGENT_CALL")
-                .required(true)
-                .timeoutMs(5000)
-                .build());
-    }
-
-    private List<AgentExecutionStep> toExecutionSteps(ExecutionPlan plan) {
-        if (plan == null || plan.nodes() == null || plan.nodes().isEmpty()) {
-            return List.of();
-        }
-
-        // 把 planner 产出的节点/边转换为 gateway 执行器认识的 AgentExecutionStep。
-        Map<String, List<String>> dependencies = buildDependencies(plan);
-        List<AgentExecutionStep> steps = new ArrayList<>();
-
-        for (ExecutionNode node : plan.nodes()) {
-            if (node == null || node.nodeType() != ExecutionNodeType.AGENT_CALL || node.target() == null || node.target().isBlank()) {
-                continue;
-            }
-
-            steps.add(AgentExecutionStep.builder()
-                    .stepId(node.nodeId())
-                    .targetAgent(node.target())
-                    .nodeType(node.nodeType().name())
-                    .dependsOn(dependencies.getOrDefault(node.nodeId(), List.of()))
-                    .timeoutMs(node.timeoutMs() > 0 ? node.timeoutMs() : 5000)
-                    .required(true)
-                    .metadata(node.metadata())
-                    .build());
-        }
-
-        return steps;
-    }
-
-    private Map<String, List<String>> buildDependencies(ExecutionPlan plan) {
-        Map<String, List<String>> dependencies = new java.util.HashMap<>();
-        if (plan.edges() == null || plan.edges().isEmpty()) {
-            return dependencies;
-        }
-
-        for (var edge : plan.edges()) {
-            if (edge == null || edge.toNodeId() == null || edge.fromNodeId() == null) {
-                continue;
-            }
-            dependencies.computeIfAbsent(edge.toNodeId(), ignored -> new ArrayList<>()).add(edge.fromNodeId());
-        }
-        return dependencies;
+        return planningStepMapper.fallbackSteps(routing);
     }
 
     @Override
@@ -224,56 +163,15 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
 
     @Override
     public PlanPreviewResponse preview(RoutingDecision routing, String traceId) {
-        // 1. 先生成步骤，再逐步评估策略结果，统计审批和阻断数量。
+        // 1. 先生成步骤，再逐步评估策略结果。
         List<AgentExecutionStep> steps = planSteps(routing, traceId);
-        List<StepPolicyPreview> previewSteps = new ArrayList<>();
-        int approvalRequiredCount = 0;
-        int blockedStepCount = 0;
-
+        List<com.example.dish.common.runtime.PolicyDecision> decisions = new ArrayList<>();
         for (AgentExecutionStep step : steps) {
-            var decision = evaluatePolicy(step, routing, traceId);
-            boolean approvalRequired = decision != null && decision.decision() == PolicyDecisionType.REQUIRE_APPROVAL;
-            boolean executable = decision != null && decision.decision() == PolicyDecisionType.ALLOW;
-            boolean blocked = decision == null || decision.decision() == PolicyDecisionType.DENY;
-            if (approvalRequired) {
-                approvalRequiredCount++;
-            }
-            if (blocked) {
-                blockedStepCount++;
-            }
-
-            previewSteps.add(new StepPolicyPreview(
-                    step.stepId(),
-                    step.targetAgent(),
-                    step.nodeType(),
-                    step.dependsOn(),
-                    decision != null ? decision.decision().name() : "UNKNOWN",
-                    decision != null ? decision.riskLevel() : "unknown",
-                    approvalRequired,
-                    executable,
-                    decision != null ? decision.reason() : "policy engine returned empty result"
-            ));
+            decisions.add(evaluatePolicy(step, routing, traceId));
         }
 
-        // 2. 把 memory 命中、DAG 预览和每步策略结果统一组装成控制台 DTO。
-        return new PlanPreviewResponse(
-                traceIdFrom(routing),
-                routing != null && routing.context() != null ? routing.context().getSessionId() : null,
-                routing != null && routing.context() != null ? routing.context().getStoreId() : null,
-                routing != null ? routing.planId() : null,
-                routing != null && routing.intent() != null ? routing.intent().name() : "UNKNOWN",
-                routing != null ? routing.executionMode() : null,
-                routing != null ? routing.confidence() : 0,
-                memoryHit(routing),
-                memorySource(routing),
-                memorySnippets(routing),
-                memoryHits(routing),
-                approvalRequiredCount,
-                blockedStepCount,
-                toPreviewNodes(steps),
-                toPreviewEdges(steps),
-                previewSteps
-        );
+        // 2. 把 memory 命中、DAG 预览和每步策略结果统一交给装配器生成控制台 DTO。
+        return planPreviewAssembler.assemble(routing, steps, decisions);
     }
 
     @Override
@@ -301,52 +199,6 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
                     approvalId, sessionId, traceId, result != null ? result.message() : null);
         }
         return approvalId;
-    }
-
-    private List<ExecutionNodeView> toPreviewNodes(List<AgentExecutionStep> steps) {
-        if (steps == null || steps.isEmpty()) {
-            return List.of();
-        }
-        List<ExecutionNodeView> nodes = new ArrayList<>();
-        for (AgentExecutionStep step : steps) {
-            nodes.add(new ExecutionNodeView(
-                    step.stepId(),
-                    step.targetAgent(),
-                    step.nodeType(),
-                    ExecutionNodeStatus.PENDING,
-                    false,
-                    asString(step.metadata() != null ? step.metadata().get("riskLevel") : null),
-                    0L,
-                    null,
-                    null,
-                    null,
-                    step.metadata() != null ? Map.copyOf(step.metadata()) : Map.of()
-            ));
-        }
-        return nodes;
-    }
-
-    private List<ExecutionEdgeView> toPreviewEdges(List<AgentExecutionStep> steps) {
-        if (steps == null || steps.isEmpty()) {
-            return List.of();
-        }
-        List<ExecutionEdgeView> edges = new ArrayList<>();
-        int edgeIndex = 1;
-        for (AgentExecutionStep step : steps) {
-            if (step.dependsOn() == null) {
-                continue;
-            }
-            for (String dependency : step.dependsOn()) {
-                edges.add(new ExecutionEdgeView(
-                        "preview-edge-" + edgeIndex++,
-                        dependency,
-                        step.stepId(),
-                        "ON_SUCCESS",
-                        Map.of()
-                ));
-            }
-        }
-        return edges;
     }
 
     private com.example.dish.common.runtime.PolicyDecision evaluatePolicy(AgentExecutionStep step, RoutingDecision routing, String traceId) {
@@ -381,58 +233,7 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
 
     @Override
     public void writeExecutionSummary(RoutingDecision routing, int executedStepCount, boolean success, String traceId) {
-        String sessionId = routing != null && routing.context() != null ? routing.context().getSessionId() : null;
-        String storeId = routing != null && routing.context() != null ? routing.context().getStoreId() : null;
-
-        String summary = "planId=" + (routing != null ? routing.planId() : null)
-                + ", intent=" + (routing != null && routing.intent() != null ? routing.intent().name() : null)
-                + ", executionMode=" + (routing != null ? routing.executionMode() : null)
-                + ", executedSteps=" + executedStepCount
-                + ", success=" + success;
-
-        MemoryWriteRequest writeRequest = new MemoryWriteRequest(
-                storeId,
-                sessionId,
-                MemoryLayer.SHORT_TERM_SESSION,
-                "execution_summary",
-                summary,
-                metadataMap(
-                        "traceId", traceId,
-                        "planId", routing != null ? routing.planId() : null,
-                        "executionMode", routing != null ? routing.executionMode() : null,
-                        "success", success,
-                        "executedStepCount", executedStepCount,
-                        "sessionId", sessionId,
-                        "storeId", storeId
-                ),
-                traceId
-        );
-
-        boolean writeOk = memoryWriteService.write(writeRequest);
-        if (!writeOk) {
-            log.warn("memory write skipped or failed: sessionId={}, traceId={}", sessionId, traceId);
-        }
-
-        if (success && executedStepCount > 0) {
-            memoryWriteService.write(new MemoryWriteRequest(
-                    storeId,
-                    sessionId,
-                    MemoryLayer.LONG_TERM_KNOWLEDGE,
-                    "operational_knowledge",
-                    "intent=" + (routing != null && routing.intent() != null ? routing.intent().name() : null)
-                            + ", executionMode=" + (routing != null ? routing.executionMode() : null)
-                            + ", executedSteps=" + executedStepCount
-                            + ", outcome=" + (success ? "success" : "failed"),
-                    metadataMap(
-                            "traceId", traceId,
-                            "planId", routing != null ? routing.planId() : null,
-                            "sessionId", sessionId,
-                            "storeId", storeId,
-                            "promotedFrom", "execution_summary"
-                    ),
-                    traceId
-            ));
-        }
+        executionSummaryWriter.write(memoryWriteService, routing, executedStepCount, success, traceId);
     }
 
     private void enrichRoutingContextWithMemory(RoutingDecision routing, String traceId) {
@@ -526,14 +327,6 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         return value instanceof Boolean bool && bool;
     }
 
-    private String memorySource(RoutingDecision routing) {
-        if (routing == null || routing.context() == null) {
-            return "none";
-        }
-        Object value = routing.context().getMetadata().get("memorySource");
-        return value instanceof String text ? text : "none";
-    }
-
     @SuppressWarnings("unchecked")
     private List<String> memorySnippets(RoutingDecision routing) {
         if (routing == null || routing.context() == null) {
@@ -546,48 +339,4 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         return List.of();
     }
 
-    @SuppressWarnings("unchecked")
-    private List<SessionMemoryRetrievalHitResponse> memoryHits(RoutingDecision routing) {
-        if (routing == null || routing.context() == null) {
-            return List.of();
-        }
-        Object value = routing.context().getMetadata().get("memoryHits");
-        if (!(value instanceof List<?> list)) {
-            return List.of();
-        }
-        return list.stream()
-                .filter(com.example.dish.control.memory.model.MemoryRetrievalHit.class::isInstance)
-                .map(com.example.dish.control.memory.model.MemoryRetrievalHit.class::cast)
-                .map(hit -> new SessionMemoryRetrievalHitResponse(
-                        hit.memoryType(),
-                        hit.memoryLayer() != null ? hit.memoryLayer().name() : null,
-                        hit.content(),
-                        hit.metadata(),
-                        hit.traceId(),
-                        hit.createdAt(),
-                        hit.sequence(),
-                        hit.retrievalSource(),
-                        hit.totalScore(),
-                        hit.keywordScore(),
-                        hit.vectorScore(),
-                        hit.recencyScore(),
-                        hit.explanation()
-                ))
-                .toList();
-    }
-    private Map<String, Object> metadataMap(Object... keyValues) {
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        for (int i = 0; i < keyValues.length - 1; i += 2) {
-            Object key = keyValues[i];
-            Object value = keyValues[i + 1];
-            if (key instanceof String text && value != null) {
-                metadata.put(text, value);
-            }
-        }
-        return metadata;
-    }
-
-    private String asString(Object value) {
-        return value instanceof String text ? text : null;
-    }
 }

@@ -43,6 +43,33 @@ public class AgentContext implements Serializable {
             .build();
     }
 
+    public static AgentContext forSession(String sessionId) {
+        return builder()
+            .sessionId(sessionId)
+            .build();
+    }
+
+    /**
+     * 构造 Agent 请求上下文，供 RPC 快捷入口复用同一套字段装配约定。
+     */
+    public static AgentContext fromRequest(String sessionId,
+                                           IntentType intent,
+                                           String storeId,
+                                           String orderId,
+                                           String dishName,
+                                           String refundReason,
+                                           String userInput) {
+        return builder()
+            .sessionId(sessionId)
+            .intent(intent)
+            .storeId(storeId)
+            .orderId(orderId)
+            .dishName(dishName)
+            .refundReason(refundReason)
+            .userInput(userInput)
+            .build();
+    }
+
     private static String generateSessionId() {
         return "SESSION_" + UUID.randomUUID().toString().substring(0, 8);
     }
@@ -68,6 +95,12 @@ public class AgentContext implements Serializable {
 
     public AgentContext withStoreId(String storeId) {
         return copyBuilder().storeId(storeId).build();
+    }
+
+    public AgentContext withMetadataValue(String key, Object value) {
+        Map<String, Object> copiedMetadata = new HashMap<>(this.metadata);
+        copiedMetadata.put(key, value);
+        return copyBuilder().metadata(copiedMetadata).build();
     }
 
     @Override

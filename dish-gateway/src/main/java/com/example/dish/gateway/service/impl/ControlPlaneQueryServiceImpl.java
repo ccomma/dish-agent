@@ -1,7 +1,6 @@
 package com.example.dish.gateway.service.impl;
 
 import com.example.dish.common.runtime.ApprovalTicket;
-import com.example.dish.common.runtime.ExecutionNodeStatus;
 import com.example.dish.control.approval.model.ApprovalDecisionAction;
 import com.example.dish.control.approval.model.ApprovalTicketDecisionRequest;
 import com.example.dish.control.approval.model.ApprovalTicketQueryRequest;
@@ -16,16 +15,13 @@ import com.example.dish.control.execution.service.ExecutionRuntimeReadService;
 import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.memory.model.MemoryReadRequest;
 import com.example.dish.control.memory.model.MemoryReadResult;
-import com.example.dish.control.memory.model.MemoryTimelineEntry;
 import com.example.dish.control.memory.model.MemoryTimelineRequest;
 import com.example.dish.control.memory.model.MemoryTimelineResult;
 import com.example.dish.control.memory.service.MemoryReadService;
 import com.example.dish.control.memory.service.MemoryTimelineService;
-import com.example.dish.control.support.ApprovalTicketCodec;
 import com.example.dish.gateway.dto.control.ApprovalDecisionResponse;
 import com.example.dish.gateway.dto.control.ApprovalTicketViewResponse;
 import com.example.dish.gateway.dto.control.ControlDashboardOverviewResponse;
-import com.example.dish.gateway.dto.control.DashboardApprovalItemResponse;
 import com.example.dish.gateway.dto.control.DashboardSessionItemResponse;
 import com.example.dish.gateway.dto.control.SessionMemoryEntryResponse;
 import com.example.dish.gateway.dto.control.SessionMemoryRetrievalHitResponse;
@@ -34,14 +30,13 @@ import com.example.dish.gateway.dto.control.SessionMemoryTimelineResponse;
 import com.example.dish.gateway.observability.ExecutionMetricsService;
 import com.example.dish.gateway.service.ControlPlaneQueryService;
 import com.example.dish.gateway.service.ExecutionResumeService;
+import com.example.dish.gateway.support.DashboardOverviewAssembler;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -70,6 +65,8 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
     private ExecutionResumeService executionResumeService;
     @Resource
     private ExecutionMetricsService executionMetricsService;
+    @Resource
+    private DashboardOverviewAssembler dashboardOverviewAssembler;
 
     @Override
     public SessionMemoryTimelineResponse getSessionTimeline(String storeId,
@@ -262,7 +259,7 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
 
     @Override
     public ControlDashboardOverviewResponse getDashboardOverview(String storeId, int limit, String traceId) {
-        // 1. 先按租户维度拉取较大的时间线窗口，作为 dashboard 聚合基础数据。
+        // 1. 按租户维度拉取较大的时间线窗口，作为 dashboard 聚合基础数据。
         MemoryTimelineResult result = memoryTimelineService.timeline(new MemoryTimelineRequest(
                 storeId,
                 null,
@@ -274,135 +271,14 @@ public class ControlPlaneQueryServiceImpl implements ControlPlaneQueryService {
                 traceId
         ));
 
-        List<MemoryTimelineEntry> entries = result.entries();
-        Map<String, Integer> memoryTypeBreakdown = new LinkedHashMap<>();
-        Map<String, Integer> memoryLayerBreakdown = new LinkedHashMap<>();
-        Map<String, DashboardSessionItemResponse> latestSessionMap = new LinkedHashMap<>();
-        Map<String, DashboardApprovalItemResponse> latestApprovalMap = new LinkedHashMap<>();
-
-        // 2. 单次遍历时间线，聚合 memory breakdown、最近会话和最近审批项。
-        for (MemoryTimelineEntry entry : entries) {
-            memoryTypeBreakdown.merge(entry.memoryType(), 1, Integer::sum);
-            if (entry.memoryLayer() != null) {
-                memoryLayerBreakdown.merge(entry.memoryLayer().name(), 1, Integer::sum);
-            }
-            String sessionId = asString(entry.metadata().get("sessionId"));
-            if (sessionId != null) {
-                latestSessionMap.merge(sessionId, toSessionItem(entry), this::pickLatest);
-            }
-            if ("approval_ticket".equals(entry.memoryType())) {
-                DashboardApprovalItemResponse approvalItem = toApprovalItem(entry);
-                if (approvalItem != null) {
-                    latestApprovalMap.merge(approvalItem.approvalId(), approvalItem, this::pickLatestApproval);
-                }
-            }
-        }
-
-        int pending = 0;
-        int approved = 0;
-        int rejected = 0;
-        for (DashboardApprovalItemResponse approval : latestApprovalMap.values()) {
-            if ("PENDING".equals(approval.status())) {
-                pending++;
-            } else if ("APPROVED".equals(approval.status())) {
-                approved++;
-            } else if ("REJECTED".equals(approval.status())) {
-                rejected++;
-            }
-        }
-
-        List<DashboardApprovalItemResponse> recentApprovals = latestApprovalMap.values().stream()
-                .sorted(Comparator.comparing(DashboardApprovalItemResponse::createdAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(limit > 0 ? limit : 10)
-                .toList();
-
-        List<DashboardSessionItemResponse> activeSessions = latestSessionMap.values().stream()
-                .map(item -> enrichWithExecution(storeId, item, traceId))
-                .sorted(Comparator.comparing(DashboardSessionItemResponse::lastUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(limit > 0 ? limit : 10)
-                .toList();
-
-        // 3. 计算运行中 / 等审批 execution 数，再统一返回 dashboard 总览。
-        int runningExecutionCount = (int) activeSessions.stream()
-                .filter(item -> ExecutionNodeStatus.RUNNING.name().equals(item.latestExecutionStatus()))
-                .count();
-        int waitingApprovalExecutionCount = (int) activeSessions.stream()
-                .filter(item -> ExecutionNodeStatus.WAITING_APPROVAL.name().equals(item.latestExecutionStatus()))
-                .count();
-
-        return new ControlDashboardOverviewResponse(
+        // 2. 服务类只补齐 execution runtime 查询能力，具体 dashboard 聚合交给 assembler。
+        return dashboardOverviewAssembler.assemble(
                 storeId,
                 traceId,
-                latestSessionMap.size(),
-                entries.size(),
-                runningExecutionCount,
-                waitingApprovalExecutionCount,
-                pending,
-                approved,
-                rejected,
-                memoryTypeBreakdown,
-                memoryLayerBreakdown,
-                recentApprovals,
-                activeSessions
+                result.entries(),
+                limit,
+                item -> enrichWithExecution(storeId, item, traceId)
         );
-    }
-
-    private DashboardApprovalItemResponse toApprovalItem(MemoryTimelineEntry entry) {
-        ApprovalTicket ticket = ApprovalTicketCodec.decode(entry.content());
-        if (ticket == null) {
-            return null;
-        }
-        return new DashboardApprovalItemResponse(
-                ticket.ticketId(),
-                asString(entry.metadata().get("sessionId")),
-                ticket.status().name(),
-                asString(ticket.payload().get("targetAgent")),
-                ticket.requestedBy(),
-                ticket.decidedBy(),
-                ticket.createdAt(),
-                ticket.decidedAt()
-        );
-    }
-
-    private DashboardSessionItemResponse toSessionItem(MemoryTimelineEntry entry) {
-        String sessionId = asString(entry.metadata().get("sessionId"));
-        return new DashboardSessionItemResponse(
-                sessionId,
-                entry.memoryType(),
-                entry.traceId(),
-                entry.createdAt(),
-                1,
-                null,
-                null
-        );
-    }
-
-    private DashboardSessionItemResponse pickLatest(DashboardSessionItemResponse left, DashboardSessionItemResponse right) {
-        DashboardSessionItemResponse latest = left.lastUpdatedAt() != null
-                && right.lastUpdatedAt() != null
-                && left.lastUpdatedAt().isAfter(right.lastUpdatedAt()) ? left : right;
-        return new DashboardSessionItemResponse(
-                latest.sessionId(),
-                latest.lastMemoryType(),
-                latest.lastTraceId(),
-                latest.lastUpdatedAt(),
-                left.eventCount() + right.eventCount(),
-                latest.latestExecutionId(),
-                latest.latestExecutionStatus()
-        );
-    }
-
-    private DashboardApprovalItemResponse pickLatestApproval(DashboardApprovalItemResponse left, DashboardApprovalItemResponse right) {
-        if (left.decidedAt() == null && right.decidedAt() == null) {
-            return left.createdAt() != null && right.createdAt() != null && left.createdAt().isAfter(right.createdAt()) ? left : right;
-        }
-        if (left.decidedAt() == null) {
-            return right;
-        }
-        if (right.decidedAt() == null) {
-            return left;
-        }
-        return left.decidedAt().isAfter(right.decidedAt()) ? left : right;
     }
 
     private DashboardSessionItemResponse enrichWithExecution(String storeId,

@@ -1,6 +1,7 @@
 package com.example.dish.common.contract;
 
 import com.example.dish.common.context.AgentContext;
+import com.example.dish.common.react.ReActEngine;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,6 +45,19 @@ public class AgentResponse implements java.io.Serializable {
             .content(message)
             .agentName(agentName)
             .context(context)
+            .build();
+    }
+
+    public static AgentResponse fromReActResult(ReActEngine.ReActResult result,
+                                                String agentName,
+                                                AgentContext context,
+                                                List<String> followUpHints) {
+        return builder()
+            .success(result.success())
+            .content(result.finalResponse())
+            .agentName(agentName)
+            .context(context)
+            .followUpHints(followUpHints)
             .build();
     }
 

@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * 记忆时间线查询存储。
@@ -69,7 +70,7 @@ public class MemoryTimelineQueryStorage {
                 .toList();
     }
 
-    private java.util.stream.Stream<MemoryEntry> filterEntries(List<MemoryEntry> entries, MemoryTimelineRequest request) {
+    private Stream<MemoryEntry> filterEntries(List<MemoryEntry> entries, MemoryTimelineRequest request) {
         // 所有时间线过滤条件统一收口到这里，避免 Redis / 内存路径各写一套判断。
         return entries.stream()
                 .filter(entry -> request.memoryLayer() == null || request.memoryLayer() == entry.memoryLayer())

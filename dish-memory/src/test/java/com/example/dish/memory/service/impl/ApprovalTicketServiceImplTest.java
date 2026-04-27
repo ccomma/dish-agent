@@ -103,6 +103,17 @@ class ApprovalTicketServiceImplTest {
         Assertions.assertFalse(source.contains("try (spanScope)"));
     }
 
+    @Test
+    void shouldKeepApprovalServiceImplAsProviderFacade() {
+        String source = fileContent("src/main/java/com/example/dish/memory/service/impl/ApprovalTicketServiceImpl.java");
+
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/memory/approval/ApprovalTicketAssembler.java")));
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/memory/approval/ApprovalDecisionApplier.java")));
+        Assertions.assertTrue(Files.exists(Path.of("src/main/java/com/example/dish/memory/approval/ApprovalTimelineWriter.java")));
+        Assertions.assertFalse(source.contains("new ApprovalTicket("));
+        Assertions.assertFalse(source.contains("memoryEntryStorage.append("));
+    }
+
     private boolean fileContains(String path, String text) {
         return fileContent(path).contains(text);
     }
