@@ -11,6 +11,7 @@ import com.example.dish.gateway.service.ChatExecutionService;
 import com.example.dish.gateway.service.ExecutionEventPublisher;
 import com.example.dish.gateway.service.OrchestrationControlService;
 import com.example.dish.gateway.service.ResponseAggregator;
+import com.example.dish.gateway.service.StepEvaluation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,8 @@ public class ChatExecutionServiceImpl implements ChatExecutionService {
     private ExecutionEventPublisher executionEventPublisher;
     @Resource
     private ExecutionStepRunner executionStepRunner;
+    @Resource
+    private ExecutionFlowSupport executionFlowSupport;
 
     @Override
     public GatewayResponse process(String userInput, String requestedSessionId, String requestStoreId, String traceId) {
@@ -80,13 +83,11 @@ public class ChatExecutionServiceImpl implements ChatExecutionService {
             AgentExecutionStep step = plannedSteps.get(i);
             int stepIndex = i + 1;
 
-            AgentExecutionStep approvalStep = orchestrationControlService.findFirstApprovalRequiredStep(List.of(step), routing, traceId);
-            if (approvalStep != null) {
-                return pauseForApproval(routing, graph, plannedSteps, approvalStep, stepIndex, stepCount, executedSteps, executionStartedAt, traceId);
+            StepEvaluation eval = orchestrationControlService.evaluateStep(step, routing, traceId);
+            if (eval == StepEvaluation.REQUIRES_APPROVAL) {
+                return pauseForApproval(routing, graph, plannedSteps, step, stepIndex, stepCount, executedSteps, executionStartedAt, traceId);
             }
-
-            List<AgentExecutionStep> allowed = orchestrationControlService.filterAllowedSteps(List.of(step), routing, traceId);
-            if (allowed.isEmpty()) {
+            if (eval == StepEvaluation.BLOCKED) {
                 return blockByPolicy(routing, graph, plannedSteps, step, i, stepIndex, stepCount, executedSteps, executionStartedAt, traceId);
             }
 
@@ -104,18 +105,9 @@ public class ChatExecutionServiceImpl implements ChatExecutionService {
             executedSteps++;
 
             if (result.response().isSuccess()) {
-                executionEventPublisher.publishNodeStatus(
-                        graph,
-                        step,
-                        ExecutionNodeStatus.SUCCEEDED,
-                        stepIndex,
-                        stepCount,
-                        traceId,
-                        "step completed successfully",
-                        result.latencyMs(),
-                        result.response(),
-                        null
-                );
+                executionFlowSupport.publishStepResult(
+                        executionEventPublisher, graph, step, stepIndex, stepCount, traceId,
+                        ExecutionNodeStatus.SUCCEEDED, "step completed successfully", result);
                 continue;
             }
 
@@ -124,15 +116,17 @@ public class ChatExecutionServiceImpl implements ChatExecutionService {
 
         // 4. 所有步骤完成后聚合响应，并写执行摘要/summary 事件。
         GatewayResponse finalResponse = responseAggregator.aggregate(responses, routing);
-        orchestrationControlService.writeExecutionSummary(routing, executedSteps, finalResponse.isSuccess(), traceId);
-        executionEventPublisher.publishExecutionSummary(
+        executionFlowSupport.finishExecution(
+                orchestrationControlService,
+                executionEventPublisher,
+                routing,
                 graph,
                 finalResponse.isSuccess() ? ExecutionNodeStatus.SUCCEEDED : ExecutionNodeStatus.FAILED,
                 traceId,
                 finalResponse.getContent(),
-                elapsedSince(executionStartedAt),
-                executedSteps
-        );
+                executionFlowSupport.elapsedSince(executionStartedAt),
+                executedSteps,
+                finalResponse.isSuccess());
         return finalResponse;
     }
 
@@ -154,20 +148,22 @@ public class ChatExecutionServiceImpl implements ChatExecutionService {
                 stepCount,
                 traceId,
                 "manual approval required before execution",
-                elapsedSince(executionStartedAt),
+                executionFlowSupport.elapsedSince(executionStartedAt),
                 null,
                 approvalId
         );
         GatewayResponse pendingResponse = orchestrationControlService.buildApprovalPendingResponse(routing, traceId, approvalId);
-        orchestrationControlService.writeExecutionSummary(routing, executedSteps, false, traceId);
-        executionEventPublisher.publishExecutionSummary(
+        executionFlowSupport.finishExecution(
+                orchestrationControlService,
+                executionEventPublisher,
+                routing,
                 graph,
                 ExecutionNodeStatus.WAITING_APPROVAL,
                 traceId,
                 "execution paused waiting for approval",
-                elapsedSince(executionStartedAt),
-                executedSteps
-        );
+                executionFlowSupport.elapsedSince(executionStartedAt),
+                executedSteps,
+                false);
         return pendingResponse;
     }
 
@@ -193,17 +189,19 @@ public class ChatExecutionServiceImpl implements ChatExecutionService {
                 null,
                 null
         );
-        cancelPendingSteps(graph, plannedSteps, currentIndex + 1, traceId, "cancelled after policy block");
+        executionFlowSupport.cancelRemainingSteps(executionEventPublisher, graph, plannedSteps, currentIndex + 1, traceId, "cancelled after policy block");
         GatewayResponse blockedResponse = orchestrationControlService.buildPolicyBlockedResponse(routing, traceId);
-        orchestrationControlService.writeExecutionSummary(routing, executedSteps, false, traceId);
-        executionEventPublisher.publishExecutionSummary(
+        executionFlowSupport.finishExecution(
+                orchestrationControlService,
+                executionEventPublisher,
+                routing,
                 graph,
                 ExecutionNodeStatus.CANCELLED,
                 traceId,
                 "execution blocked by policy",
-                elapsedSince(executionStartedAt),
-                executedSteps
-        );
+                executionFlowSupport.elapsedSince(executionStartedAt),
+                executedSteps,
+                false);
         return blockedResponse;
     }
 
@@ -219,30 +217,23 @@ public class ChatExecutionServiceImpl implements ChatExecutionService {
                                               ExecutionStepRunner.StepRunResult result,
                                               Instant executionStartedAt,
                                               String traceId) {
-        executionEventPublisher.publishNodeStatus(
-                graph,
-                step,
-                ExecutionNodeStatus.FAILED,
-                stepIndex,
-                stepCount,
-                traceId,
-                "agent degraded or execution failed",
-                result.latencyMs(),
-                result.response(),
-                null
-        );
-        cancelPendingSteps(graph, plannedSteps, currentIndex + 1, traceId, "cancelled after upstream failure");
+        executionFlowSupport.publishStepResult(
+                executionEventPublisher, graph, step, stepIndex, stepCount, traceId,
+                ExecutionNodeStatus.FAILED, "agent degraded or execution failed", result);
+        executionFlowSupport.cancelRemainingSteps(executionEventPublisher, graph, plannedSteps, currentIndex + 1, traceId, "cancelled after upstream failure");
 
         GatewayResponse failedResponse = responseAggregator.aggregate(responses, routing);
-        orchestrationControlService.writeExecutionSummary(routing, executedSteps, false, traceId);
-        executionEventPublisher.publishExecutionSummary(
+        executionFlowSupport.finishExecution(
+                orchestrationControlService,
+                executionEventPublisher,
+                routing,
                 graph,
                 ExecutionNodeStatus.FAILED,
                 traceId,
                 "execution failed during step dispatch",
-                elapsedSince(executionStartedAt),
-                executedSteps
-        );
+                executionFlowSupport.elapsedSince(executionStartedAt),
+                executedSteps,
+                false);
         return failedResponse;
     }
 
@@ -250,29 +241,4 @@ public class ChatExecutionServiceImpl implements ChatExecutionService {
         return "SESSION_" + UUID.randomUUID().toString().substring(0, 8);
     }
 
-    private void cancelPendingSteps(ExecutionGraphViewResult graph,
-                                    List<AgentExecutionStep> steps,
-                                    int startIndex,
-                                    String traceId,
-                                    String reason) {
-        for (int i = startIndex; i < steps.size(); i++) {
-            AgentExecutionStep pending = steps.get(i);
-            executionEventPublisher.publishNodeStatus(
-                    graph,
-                    pending,
-                    ExecutionNodeStatus.CANCELLED,
-                    i + 1,
-                    steps.size(),
-                    traceId,
-                    reason,
-                    0L,
-                    null,
-                    null
-            );
-        }
-    }
-
-    private long elapsedSince(Instant startedAt) {
-        return Math.max(0L, System.currentTimeMillis() - startedAt.toEpochMilli());
-    }
 }

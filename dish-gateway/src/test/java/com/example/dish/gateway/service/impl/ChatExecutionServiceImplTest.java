@@ -64,6 +64,7 @@ class ChatExecutionServiceImplTest {
         inject(service, "routingAgent", new CountingRoutingAgent(routing));
         inject(service, "orchestrationControlService", orchestration);
         inject(service, "executionEventPublisher", events);
+        inject(service, "executionFlowSupport", new ExecutionFlowSupport());
         inject(service, "executionStepRunner", new SuccessfulStepRunner());
         inject(service, "responseAggregator", new FakeResponseAggregator());
 
@@ -123,13 +124,8 @@ class ChatExecutionServiceImplTest {
         }
 
         @Override
-        public List<AgentExecutionStep> filterAllowedSteps(List<AgentExecutionStep> steps, RoutingDecision routing, String traceId) {
-            return steps;
-        }
-
-        @Override
-        public AgentExecutionStep findFirstApprovalRequiredStep(List<AgentExecutionStep> steps, RoutingDecision routing, String traceId) {
-            return null;
+        public com.example.dish.gateway.service.StepEvaluation evaluateStep(AgentExecutionStep step, RoutingDecision routing, String traceId) {
+            return com.example.dish.gateway.service.StepEvaluation.ALLOWED;
         }
 
         @Override
@@ -177,6 +173,9 @@ class ChatExecutionServiceImplTest {
                     null,
                     0L,
                     Map.of(),
+                    routing.context() != null ? routing.context().getUserInput() : null,
+                    routing.targetAgent(),
+                    routing.confidence(),
                     List.of(),
                     List.of(),
                     0

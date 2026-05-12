@@ -18,14 +18,9 @@ public interface OrchestrationControlService {
     List<AgentExecutionStep> planSteps(RoutingDecision routing, String traceId);
 
     /**
-     * 按策略过滤可执行步骤（拒绝或需审批的步骤在此阶段剔除）。
+     * 评估单个步骤的策略结果：允许执行、阻断或需审批。
      */
-    List<AgentExecutionStep> filterAllowedSteps(List<AgentExecutionStep> steps, RoutingDecision routing, String traceId);
-
-    /**
-     * 返回第一个需要人工审批的步骤，若不存在则返回 null。
-     */
-    AgentExecutionStep findFirstApprovalRequiredStep(List<AgentExecutionStep> steps, RoutingDecision routing, String traceId);
+    StepEvaluation evaluateStep(AgentExecutionStep step, RoutingDecision routing, String traceId);
 
     /**
      * 写入执行摘要到记忆服务。

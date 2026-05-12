@@ -2,33 +2,25 @@ package com.example.dish.gateway.service.impl;
 
 import com.example.dish.common.contract.AgentExecutionStep;
 import com.example.dish.common.contract.RoutingDecision;
-import com.example.dish.common.runtime.ExecutionContext;
-import com.example.dish.common.runtime.ExecutionNode;
-import com.example.dish.common.runtime.ExecutionNodeType;
-import com.example.dish.common.runtime.PolicyDecisionType;
 import com.example.dish.control.approval.model.ApprovalTicketCreateRequest;
 import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.approval.service.ApprovalTicketService;
 import com.example.dish.control.memory.model.MemoryReadRequest;
 import com.example.dish.control.memory.model.MemoryReadResult;
 import com.example.dish.control.memory.service.MemoryReadService;
-import com.example.dish.control.memory.service.MemoryWriteService;
 import com.example.dish.control.planner.model.PlanningRequest;
 import com.example.dish.control.planner.model.PlanningResult;
 import com.example.dish.control.planner.service.ExecutionPlannerService;
-import com.example.dish.control.policy.model.PolicyEvaluationRequest;
-import com.example.dish.control.policy.service.PolicyDecisionService;
 import com.example.dish.gateway.dto.GatewayResponse;
 import com.example.dish.gateway.dto.control.PlanPreviewResponse;
 import com.example.dish.gateway.service.OrchestrationControlService;
+import com.example.dish.gateway.service.StepEvaluation;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -44,21 +36,20 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
     @DubboReference(timeout = 15000, retries = 0, check = false)
     private ExecutionPlannerService executionPlannerService;
 
-    @DubboReference(timeout = 8000, retries = 0, check = false)
-    private PolicyDecisionService policyDecisionService;
-
-    @DubboReference(timeout = 5000, retries = 0, check = false)
-    private MemoryWriteService memoryWriteService;
-
     @DubboReference(timeout = 5000, retries = 0, check = false)
     private MemoryReadService memoryReadService;
 
     @DubboReference(timeout = 5000, retries = 0, check = false)
     private ApprovalTicketService approvalTicketService;
 
-    private final PlanningStepMapper planningStepMapper = new PlanningStepMapper();
-    private final PlanPreviewAssembler planPreviewAssembler = new PlanPreviewAssembler();
-    private final ExecutionSummaryWriter executionSummaryWriter = new ExecutionSummaryWriter();
+    @javax.annotation.Resource
+    private PlanningStepMapper planningStepMapper;
+    @javax.annotation.Resource
+    private PlanPreviewAssembler planPreviewAssembler;
+    @javax.annotation.Resource
+    private ExecutionSummaryWriter executionSummaryWriter;
+    @javax.annotation.Resource
+    private PolicyGatekeeper policyGatekeeper;
 
     @Override
     public List<AgentExecutionStep> planSteps(RoutingDecision routing, String traceId) {
@@ -89,39 +80,16 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
     }
 
     @Override
-    public List<AgentExecutionStep> filterAllowedSteps(List<AgentExecutionStep> steps, RoutingDecision routing, String traceId) {
-        // 1. 对每个步骤独立做策略评估，只保留明确允许执行的步骤。
-        if (steps == null || steps.isEmpty()) {
-            return List.of();
+    public StepEvaluation evaluateStep(AgentExecutionStep step, RoutingDecision routing, String traceId) {
+        AgentExecutionStep approvalStep = policyGatekeeper.findFirstApprovalRequiredStep(List.of(step), routing, traceId);
+        if (approvalStep != null) {
+            return StepEvaluation.REQUIRES_APPROVAL;
         }
-
-        List<AgentExecutionStep> allowed = new ArrayList<>();
-        for (AgentExecutionStep step : steps) {
-            var decision = evaluatePolicy(step, routing, traceId);
-            if (decision != null && decision.decision() == PolicyDecisionType.ALLOW) {
-                allowed.add(step);
-            } else {
-                log.warn("step blocked by policy: stepId={}, targetAgent={}, decision={}",
-                        step.stepId(), step.targetAgent(), decision != null ? decision.decision() : null);
-            }
+        List<AgentExecutionStep> allowed = policyGatekeeper.filterAllowedSteps(List.of(step), routing, traceId);
+        if (allowed.isEmpty()) {
+            return StepEvaluation.BLOCKED;
         }
-        return allowed;
-    }
-
-    @Override
-    public AgentExecutionStep findFirstApprovalRequiredStep(List<AgentExecutionStep> steps, RoutingDecision routing, String traceId) {
-        // 顺序扫描步骤，找到第一个要求人工审批的节点。
-        if (steps == null || steps.isEmpty()) {
-            return null;
-        }
-
-        for (AgentExecutionStep step : steps) {
-            var decision = evaluatePolicy(step, routing, traceId);
-            if (decision != null && decision.decision() == PolicyDecisionType.REQUIRE_APPROVAL) {
-                return step;
-            }
-        }
-        return null;
+        return StepEvaluation.ALLOWED;
     }
 
     @Override
@@ -165,10 +133,9 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
     public PlanPreviewResponse preview(RoutingDecision routing, String traceId) {
         // 1. 先生成步骤，再逐步评估策略结果。
         List<AgentExecutionStep> steps = planSteps(routing, traceId);
-        List<com.example.dish.common.runtime.PolicyDecision> decisions = new ArrayList<>();
-        for (AgentExecutionStep step : steps) {
-            decisions.add(evaluatePolicy(step, routing, traceId));
-        }
+        List<com.example.dish.common.runtime.PolicyDecision> decisions = steps.stream()
+                .map(step -> policyGatekeeper.evaluate(step, routing, traceId))
+                .toList();
 
         // 2. 把 memory 命中、DAG 预览和每步策略结果统一交给装配器生成控制台 DTO。
         return planPreviewAssembler.assemble(routing, steps, decisions);
@@ -201,39 +168,9 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         return approvalId;
     }
 
-    private com.example.dish.common.runtime.PolicyDecision evaluatePolicy(AgentExecutionStep step, RoutingDecision routing, String traceId) {
-        // 把 gateway step 重新映射成 policy 服务需要的 node/context 结构。
-        ExecutionNode node = new ExecutionNode(
-                step.stepId(),
-                ExecutionNodeType.AGENT_CALL,
-                step.targetAgent(),
-                step.timeoutMs(),
-                0,
-                false,
-                Map.of(),
-                step.metadata()
-        );
-        ExecutionContext context = new ExecutionContext(
-                traceId,
-                routing != null ? routing.planId() : null,
-                routing != null ? routing.context() : null,
-                Map.of(),
-                Map.of("executionMode", routing != null ? routing.executionMode() : null)
-        );
-        PolicyEvaluationRequest policyRequest = new PolicyEvaluationRequest(
-                node,
-                context,
-                routing != null && routing.context() != null ? routing.context().getStoreId() : null,
-                traceId
-        );
-
-        var result = policyDecisionService.evaluate(policyRequest);
-        return result != null ? result.decision() : null;
-    }
-
     @Override
     public void writeExecutionSummary(RoutingDecision routing, int executedStepCount, boolean success, String traceId) {
-        executionSummaryWriter.write(memoryWriteService, routing, executedStepCount, success, traceId);
+        executionSummaryWriter.write(routing, executedStepCount, success, traceId);
     }
 
     private void enrichRoutingContextWithMemory(RoutingDecision routing, String traceId) {
@@ -256,17 +193,17 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
                     5,
                     traceId
             ));
-            routing.context().getMetadata().put("traceId", traceId);
-            routing.context().getMetadata().put("memoryHit", result != null && result.hit());
-            routing.context().getMetadata().put("memorySource", result != null ? result.source() : "unknown");
-            routing.context().getMetadata().put("memorySnippets", result != null ? result.snippets() : List.of());
+            routing.context().setTraceId(traceId);
+            routing.context().setMemoryHit(result != null && result.hit());
+            routing.context().setMemorySource(result != null ? result.source() : "unknown");
+            routing.context().setMemorySnippets(result != null ? result.snippets() : List.of());
             routing.context().getMetadata().put("memoryHits", result != null ? result.hits() : List.of());
         } catch (Exception ex) {
             log.warn("memory read failed: sessionId={}, traceId={}, message={}",
                     sessionId, traceId, ex.getMessage());
-            routing.context().getMetadata().put("memoryHit", false);
-            routing.context().getMetadata().put("memorySource", "unavailable");
-            routing.context().getMetadata().put("memorySnippets", List.of());
+            routing.context().setMemoryHit(false);
+            routing.context().setMemorySource("unavailable");
+            routing.context().setMemorySnippets(List.of());
             routing.context().getMetadata().put("memoryHits", List.of());
         }
     }
@@ -275,16 +212,16 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         if (routing == null || routing.context() == null) {
             return;
         }
-        routing.context().getMetadata().put("traceId", traceId);
-        routing.context().getMetadata().put("planId", routing.planId());
-        routing.context().getMetadata().put("executionMode", routing.executionMode());
+        routing.context().setTraceId(traceId);
+        routing.context().setPlanId(routing.planId());
+        routing.context().setExecutionMode(routing.executionMode());
     }
 
     private void attachApprovalMetadata(RoutingDecision routing, String approvalId) {
         if (routing == null || routing.context() == null) {
             return;
         }
-        routing.context().getMetadata().put("approvalId", approvalId);
+        routing.context().setApprovalId(approvalId);
     }
 
     private GatewayResponse buildGatewayResponse(RoutingDecision routing,
@@ -315,28 +252,23 @@ public class OrchestrationControlServiceImpl implements OrchestrationControlServ
         if (routing == null || routing.context() == null) {
             return null;
         }
-        Object traceId = routing.context().getMetadata().get("traceId");
-        return traceId instanceof String value ? value : null;
+        return routing.context().getTraceId();
     }
 
     private boolean memoryHit(RoutingDecision routing) {
         if (routing == null || routing.context() == null) {
             return false;
         }
-        Object value = routing.context().getMetadata().get("memoryHit");
-        return value instanceof Boolean bool && bool;
+        Boolean value = routing.context().getMemoryHit();
+        return value != null && value;
     }
 
-    @SuppressWarnings("unchecked")
     private List<String> memorySnippets(RoutingDecision routing) {
         if (routing == null || routing.context() == null) {
             return List.of();
         }
-        Object value = routing.context().getMetadata().get("memorySnippets");
-        if (value instanceof List<?> list) {
-            return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
-        }
-        return List.of();
+        List<String> value = routing.context().getMemorySnippets();
+        return value != null ? value : List.of();
     }
 
 }

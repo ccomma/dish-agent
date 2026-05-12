@@ -55,7 +55,10 @@ class ExecutionRuntimeServiceImplTest {
                 Instant.parse("2026-04-21T10:00:00Z"),
                 null,
                 0L,
-                Map.of("userInput", "查询订单123"),
+                Map.of(),
+                "查询订单123",
+                null,
+                0.0,
                 List.of(new ExecutionNodeView(
                         "node-1",
                         "work-order",

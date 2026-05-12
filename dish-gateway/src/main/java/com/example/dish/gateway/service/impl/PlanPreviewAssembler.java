@@ -11,6 +11,8 @@ import com.example.dish.gateway.dto.control.PlanPreviewResponse;
 import com.example.dish.gateway.dto.control.SessionMemoryRetrievalHitResponse;
 import com.example.dish.gateway.dto.control.StepPolicyPreview;
 
+import org.springframework.stereotype.Component;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -18,8 +20,9 @@ import java.util.Map;
 /**
  * 编排预览响应装配器。
  * 负责把步骤、策略判定和 routing metadata 组装成控制台 DTO，
- * 让控制面门面只保留“先规划、再评估、最后装配”的主流程。
+ * 让控制面门面只保留"先规划、再评估、最后装配"的主流程。
  */
+@Component
 public class PlanPreviewAssembler {
 
     public PlanPreviewResponse assemble(RoutingDecision routing,
@@ -127,35 +130,31 @@ public class PlanPreviewAssembler {
         if (routing == null || routing.context() == null) {
             return null;
         }
-        Object traceId = routing.context().getMetadata().get("traceId");
-        return traceId instanceof String value ? value : null;
+        return routing.context().getTraceId();
     }
 
     private boolean memoryHit(RoutingDecision routing) {
         if (routing == null || routing.context() == null) {
             return false;
         }
-        Object value = routing.context().getMetadata().get("memoryHit");
-        return value instanceof Boolean bool && bool;
+        Boolean value = routing.context().getMemoryHit();
+        return value != null && value;
     }
 
     private String memorySource(RoutingDecision routing) {
         if (routing == null || routing.context() == null) {
             return "none";
         }
-        Object value = routing.context().getMetadata().get("memorySource");
-        return value instanceof String text ? text : "none";
+        String value = routing.context().getMemorySource();
+        return value != null ? value : "none";
     }
 
     private List<String> memorySnippets(RoutingDecision routing) {
         if (routing == null || routing.context() == null) {
             return List.of();
         }
-        Object value = routing.context().getMetadata().get("memorySnippets");
-        if (value instanceof List<?> list) {
-            return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
-        }
-        return List.of();
+        List<String> value = routing.context().getMemorySnippets();
+        return value != null ? value : List.of();
     }
 
     private List<SessionMemoryRetrievalHitResponse> memoryHits(RoutingDecision routing) {

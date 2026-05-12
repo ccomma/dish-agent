@@ -4,8 +4,10 @@ import com.example.dish.common.contract.RoutingDecision;
 import com.example.dish.control.memory.model.MemoryLayer;
 import com.example.dish.control.memory.model.MemoryWriteRequest;
 import com.example.dish.control.memory.service.MemoryWriteService;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -14,12 +16,15 @@ import java.util.Map;
  * execution summary 写入器。
  * 负责把 gateway 执行结果写入短期会话记忆，并在成功时沉淀长期运营知识。
  */
+@Component
 public class ExecutionSummaryWriter {
 
     private static final Logger log = LoggerFactory.getLogger(ExecutionSummaryWriter.class);
 
-    public void write(MemoryWriteService memoryWriteService,
-                      RoutingDecision routing,
+    @DubboReference(timeout = 5000, retries = 0, check = false)
+    private MemoryWriteService memoryWriteService;
+
+    public void write(RoutingDecision routing,
                       int executedStepCount,
                       boolean success,
                       String traceId) {
@@ -30,7 +35,6 @@ public class ExecutionSummaryWriter {
         String sessionId = routing != null && routing.context() != null ? routing.context().getSessionId() : null;
         String storeId = routing != null && routing.context() != null ? routing.context().getStoreId() : null;
 
-        // 1. 先写短期 execution summary，供会话时间线和 dashboard 查询。
         boolean writeOk = memoryWriteService.write(summaryRequest(storeId, sessionId, routing, executedStepCount, success, traceId));
         if (!writeOk) {
             log.warn("memory write skipped or failed: sessionId={}, traceId={}", sessionId, traceId);

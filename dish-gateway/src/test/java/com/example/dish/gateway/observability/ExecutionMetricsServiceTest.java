@@ -30,6 +30,9 @@ class ExecutionMetricsServiceTest {
                 null,
                 0L,
                 Map.of(),
+                null,
+                null,
+                0.0,
                 List.of(),
                 List.of(),
                 0

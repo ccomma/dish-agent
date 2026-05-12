@@ -8,6 +8,7 @@ import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingMatch;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -20,6 +21,7 @@ import java.util.UUID;
  * 负责把写入请求转换为稳定的长期知识文档，并把向量库命中还原为召回结果；
  * 不参与向量库初始化和检索编排。
  */
+@Component
 public class LongTermMemoryDocumentAssembler {
 
     private static final String GLOBAL_TENANT = "GLOBAL";

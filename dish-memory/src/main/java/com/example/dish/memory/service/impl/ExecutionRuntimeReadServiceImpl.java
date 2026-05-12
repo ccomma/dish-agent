@@ -89,6 +89,9 @@ public class ExecutionRuntimeReadServiceImpl implements ExecutionRuntimeReadServ
                 graph.finishedAt(),
                 currentDurationMs,
                 graph.metadata(),
+                graph.userInput(),
+                graph.routingTargetAgent(),
+                graph.routingConfidence(),
                 graph.nodes(),
                 graph.edges(),
                 state.events().size()

@@ -35,6 +35,8 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
     private ExecutionGraphSupport executionGraphSupport;
     @Resource
     private ExecutionStepRunner executionStepRunner;
+    @Resource
+    private ExecutionFlowSupport executionFlowSupport;
 
     @Override
     public void resumeApprovedExecution(String storeId, String sessionId, String executionId, String traceId) {
@@ -75,28 +77,36 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
             );
 
             if (result.response().isSuccess()) {
-                executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.SUCCEEDED, stepIndex, stepCount, traceId, "step completed after approval", result.latencyMs(), result.response(), null);
+                executionFlowSupport.publishStepResult(
+                        executionEventPublisher, graph, step, stepIndex, stepCount, traceId,
+                        ExecutionNodeStatus.SUCCEEDED, "step completed after approval", result);
                 executed++;
                 continue;
             }
 
-            executionEventPublisher.publishNodeStatus(graph, step, ExecutionNodeStatus.FAILED, stepIndex, stepCount, traceId, "step failed after approval", result.latencyMs(), result.response(), null);
+            executionFlowSupport.publishStepResult(
+                    executionEventPublisher, graph, step, stepIndex, stepCount, traceId,
+                    ExecutionNodeStatus.FAILED, "step failed after approval", result);
             success = false;
             executed++;
-            cancelPending(graph, ordered, stepIndex, stepCount, traceId, "downstream cancelled due to upstream failure");
+            executionFlowSupport.cancelRemainingSteps(
+                    executionEventPublisher, executionGraphSupport, graph, ordered, stepIndex, stepCount, traceId,
+                    "downstream cancelled due to upstream failure");
             break;
         }
 
         // 3. 最后补写 execution summary，保证控制台和指标都能看到恢复后的结果。
-        orchestrationControlService.writeExecutionSummary(routing, executed, success, traceId);
-        executionEventPublisher.publishExecutionSummary(
+        executionFlowSupport.finishExecution(
+                orchestrationControlService,
+                executionEventPublisher,
+                routing,
                 graph,
                 success ? ExecutionNodeStatus.SUCCEEDED : ExecutionNodeStatus.FAILED,
                 traceId,
                 success ? "execution resumed and completed" : "execution resumed but failed",
                 graph.durationMs(),
-                executed
-        );
+                executed,
+                success);
     }
 
     @Override
@@ -119,22 +129,16 @@ public class ExecutionResumeServiceImpl implements ExecutionResumeService {
             }
         }
         RoutingDecision routing = executionGraphSupport.reconstructRouting(graph);
-        orchestrationControlService.writeExecutionSummary(routing, 0, false, traceId);
-        executionEventPublisher.publishExecutionSummary(graph, ExecutionNodeStatus.CANCELLED, traceId, reason, graph.durationMs(), 0);
-    }
-
-    private void cancelPending(ExecutionGraphViewResult graph,
-                               List<AgentExecutionStep> steps,
-                               int currentStepIndex,
-                               int stepCount,
-                               String traceId,
-                               String reason) {
-        for (int i = currentStepIndex; i < steps.size(); i++) {
-            AgentExecutionStep pending = steps.get(i);
-            var node = executionGraphSupport.findNode(graph, pending.stepId());
-            if (node != null && node.status() == ExecutionNodeStatus.PENDING) {
-                executionEventPublisher.publishNodeStatus(graph, pending, ExecutionNodeStatus.CANCELLED, i + 1, stepCount, traceId, reason, 0L, null, node.approvalId());
-            }
-        }
+        executionFlowSupport.finishExecution(
+                orchestrationControlService,
+                executionEventPublisher,
+                routing,
+                graph,
+                ExecutionNodeStatus.CANCELLED,
+                traceId,
+                reason,
+                graph.durationMs(),
+                0,
+                false);
     }
 }

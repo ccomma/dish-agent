@@ -50,6 +50,9 @@ public class ExecutionRuntimeGraphProjector {
                 finishedAt,
                 durationMs,
                 graph.metadata(),
+                graph.userInput(),
+                graph.routingTargetAgent(),
+                graph.routingConfidence(),
                 nodes,
                 graph.edges(),
                 graph.totalEvents() + 1

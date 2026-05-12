@@ -7,6 +7,8 @@ import com.example.dish.control.memory.model.MemoryTimelineRequest;
 import com.example.dish.control.memory.model.MemoryTimelineResult;
 import com.example.dish.control.memory.model.MemoryWriteRequest;
 import com.example.dish.memory.model.MemoryEntry;
+import com.example.dish.memory.storage.LongTermMemoryDocumentAssembler;
+import com.example.dish.memory.storage.LongTermMemoryProviderRuntime;
 import com.example.dish.memory.storage.MemoryEntryStorage;
 import com.example.dish.memory.storage.LongTermMemoryVectorStore;
 import com.example.dish.memory.storage.MemoryTimelineQueryStorage;
@@ -36,10 +38,16 @@ class MemoryReadWriteServiceImplTest {
     private MemoryEntryStorage memoryEntryStorage;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         longTermMemoryVectorStore = new LongTermMemoryVectorStore();
+        inject(longTermMemoryVectorStore, "providerRuntime", new LongTermMemoryProviderRuntime());
+        inject(longTermMemoryVectorStore, "documentAssembler", new LongTermMemoryDocumentAssembler());
         memoryEntryStorage = new MemoryEntryStorage();
         longTermMemoryVectorStore.clearForTest();
+        // @PostConstruct won't fire in unit tests — call init() manually
+        Method init = LongTermMemoryVectorStore.class.getDeclaredMethod("init");
+        init.setAccessible(true);
+        init.invoke(longTermMemoryVectorStore);
         ApprovalTicketServiceImpl.clearForTest();
         MemoryReadServiceImpl.clearForTest();
     }

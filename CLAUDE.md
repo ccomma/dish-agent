@@ -1,256 +1,44 @@
 # CLAUDE.md
 
-本文件为 Claude Code (claude.ai/code) 在此代码库中工作时提供指导。
+本文件是面向 Claude Code 的冷启动入口。进入仓库后不要一次性加载全部文档，先按下面顺序读取最小上下文，再按任务补充。
 
-**重要**：每次对项目进行修改后，请检查是否需要同步更新本文件和 README.md，以确保文档与代码保持一致。
+## 首次加载顺序
 
-## 项目概述
+1. [docs/context/CURRENT_HANDOFF.md](docs/context/CURRENT_HANDOFF.md)
+2. 当前阶段 handoff：
+   [docs/phases/phase-06-rag-2.0/HANDOFF.md](docs/phases/phase-06-rag-2.0/HANDOFF.md)
+3. 在进入正式实现、阶段切换或中途重规划前，读取
+   [docs/process/DEVELOPMENT_FLOW.md](docs/process/DEVELOPMENT_FLOW.md)
+4. 需要 `docs/` 目录 ownership 与辅助文档处理规则时，读取
+   [docs/README.md](docs/README.md)
+5. 需要长期产品边界与稳定架构约束时，读取
+   [DESIGN.md](DESIGN.md)
+6. 需要项目概览、启动方式与公开入口导航时，读取
+   [README.md](README.md)
 
-这是一个 **LangChain4j 1.x 微服务架构项目**，包含两类模块：
+## 强制流程
 
-### 微服务模块（新架构 - v2.0）
+开始任何正式代码工作前，必须遵循
+[docs/process/DEVELOPMENT_FLOW.md](docs/process/DEVELOPMENT_FLOW.md)
+定义的阶段流程：
 
-基于 **Spring Cloud Alibaba + Dubbo** 的工业级微服务架构：
+`PRD → 技术设计 → 测试计划 → 代码实现 → 验收 → 合并`
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Gateway Layer                            │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐ │
-│  │  意图识别    │ →  │   Dubbo RPC │ →  │    结果整合         │ │
-│  │(RoutingAgent)│    │  (路由分发)  │    │ (ResponseAggregator)│ │
-│  └─────────────┘    └─────────────┘    └─────────────────────┘ │
-├─────────────────────────────────────────────────────────────────┤
-│                     Agent Cluster (独立部署)                     │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐ │
-│  │ dish-agent-dish  │  │dish-agent-work  │  │dish-agent-   │ │
-│  │ @DubboService   │  │   order         │  │    chat      │ │
-│  │ + ReAct Loop   │  │ @DubboService   │  │ @DubboService│ │
-│  │ + RAG Pipeline │  │ + ReAct Loop   │  │              │ │
-│  └──────────────────┘  └──────────────────┘  └──────────────┘ │
-├─────────────────────────────────────────────────────────────────┤
-│                          dish-common                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐│
-│  │ ReAct Engine│  │ Tool Call   │  │ Context / Tracing /     ││
-│  │ (通用封装)  │  │ Framework   │  │ Dubbo Interfaces      ││
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-```
+如果当前任务是新增需求、阶段切换或中途重规划，先修正文档层，再更新
+`CURRENT_HANDOFF.md`，不要直接进入实现。
 
-| 模块 | 端口 | 职责 |
-|------|------|------|
-| dish-gateway | 8080 | HTTP 入口、意图路由、结果聚合 |
-| dish-agent-dish | 20881 (Dubbo) | 菜品知识 RAG + ReAct 多步推理 |
-| dish-agent-workorder | 20882 (Dubbo) | 库存/订单/退款 + ReAct 多步推理 |
-| dish-agent-chat | 20883 (Dubbo) | 闲聊对话 |
-| dish-common | - | 公共组件：ReActEngine、AgentContext、Dubbo 接口 |
+## 必须知道的仓库约束
 
-### 遗留模块（保留用于教学）
+1. Gateway 只依赖 `dish-control-api`，不直接依赖 Provider 实现模块。
+2. Agent 之间不直接通信，统一经 Gateway 编排。
+3. 记忆读写统一走 `dish-memory` Dubbo 接口，Agent 不直接访问 Redis/Milvus。
+4. 所有跨链路请求都要保持 `traceId` 透传：HTTP `X-Trace-Id`、Dubbo attachment `traceId`、日志 MDC `traceId=%X{traceId}`。
+5. `docs/discovery/` 是上游输入，不是执行态文档。
 
-| 模块 | 用途 |
-|------|------|
-| langchain4j-demo | LangChain4j 1.x 教学演示 |
-| langchain4j-enterprise | 单体版企业级多Agent（已迁移到微服务） |
+## 何时继续加载长文档
 
-## 常用命令
-
-### 构建和编译
-
-```bash
-# 编译全部模块
-mvn compile -s settings-test.xml
-
-# 仅编译微服务模块
-mvn compile -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
-
-# 清理并编译
-mvn clean compile -s settings-test.xml
-
-# 打包微服务 JAR
-mvn package -pl dish-common,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
-```
-
-### 微服务启动顺序
-
-```bash
-# 1. 启动 Nacos（服务注册与发现）
-docker run -d --name nacos -p 8848:8848 nacos/nacos-server
-
-# 2. 启动 Agent 服务（可并行）
-java -jar dish-agent-dish/target/dish-agent-dish.jar
-java -jar dish-agent-workorder/target/dish-agent-workorder.jar
-java -jar dish-agent-chat/target/dish-agent-chat.jar
-
-# 3. 启动网关
-java -jar dish-gateway/target/dish-gateway.jar
-```
-
-### 微服务测试
-
-```bash
-# 调用网关 API
-curl -X POST http://localhost:8080/api/chat/process \
-  -H "Content-Type: application/json" \
-  -d '{"message": "宫保鸡丁是什么菜系？"}'
-
-# 健康检查
-curl http://localhost:8080/api/chat/health
-```
-
-### 运行教学演示示例
-
-```bash
-# 提示模板示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.basics.PromptTemplateExample" -s settings-test.xml
-
-# 基础对话示例
-mvn exec:java -Dexec.mainClass="com.example.langchain4jdemo.basics.BasicChatExample" -s settings-test.xml
-```
-
-## 项目结构
-
-```
-dish-agent/
-├── pom.xml                              # 父POM（Spring Cloud Alibaba 2023.0.1.0 + Dubbo 3.2.4）
-├── settings-test.xml                     # Maven 配置
-│
-├── dish-common/                          # 公共模块
-│   └── src/main/java/com/example/dish/
-│       ├── agent/ReActState.java         # ReAct状态机
-│       ├── classifier/IntentType.java   # 意图枚举
-│       ├── context/AgentContext.java      # 上下文传递
-│       ├── contract/
-│       │   ├── AgentResponse.java        # 统一响应
-│       │   └── RoutingDecision.java      # 路由决策
-│       ├── react/
-│       │   ├── ReActEngine.java          # ReAct引擎接口
-│       │   └── AbstractReActEngine.java  # ReAct执行器抽象类
-│       └── rpc/
-│           ├── DishAgentService.java     # 菜品Agent Dubbo接口
-│           ├── WorkOrderAgentService.java # 工单Agent Dubbo接口
-│           └── ChatAgentService.java     # 闲聊Agent Dubbo接口
-│
-├── dish-gateway/                         # 网关服务（8080端口）
-│   └── src/main/java/com/example/dish/gateway/
-│       ├── GatewayApplication.java       # Spring Boot 启动类
-│       ├── controller/ChatController.java # HTTP 入口
-│       ├── service/
-│       │   ├── impl/AgentDispatchServiceImpl.java # Dubbo 客户端调用
-│       │   └── impl/ResponseAggregatorImpl.java   # 结果聚合
-│       └── agent/RoutingAgent.java        # 意图识别路由
-│
-├── dish-agent-dish/                      # 菜品知识Agent（Dubbo 20881）
-│   └── src/main/java/com/example/dish/
-│       ├── DishAgentApplication.java      # @EnableDubbo 启动类
-│       ├── rag/
-│       │   ├── RAGPipeline.java            # RAG两阶段检索管道
-│       │   └── EmbeddingService.java      # 向量化服务
-│       └── service/
-│           ├── DishAgentServiceImpl.java # @DubboService 实现
-│           └── DishReActAgent.java        # 内部ReAct多步推理
-│
-├── dish-agent-workorder/                 # 工单处理Agent（Dubbo 20882）
-│   └── src/main/java/com/example/dish/
-│       ├── WorkOrderAgentApplication.java
-│       ├── tools/                         # 业务工具
-│       │   ├── InventoryTools.java
-│       │   ├── OrderTools.java
-│       │   └── RefundTools.java
-│       └── service/
-│           ├── WorkOrderAgentServiceImpl.java
-│           └── WorkOrderReActAgent.java
-│
-├── dish-agent-chat/                      # 闲聊Agent（Dubbo 20883）
-│   └── src/main/java/com/example/dish/
-│       ├── ChatAgentApplication.java
-│       └── service/ChatAgentServiceImpl.java
-│
-├── langchain4j-demo/                     # 教学演示模块（保留）
-│   └── src/main/java/com/example/langchain4jdemo/
-│       ├── basics/
-│       │   ├── BasicChatExample.java
-│       │   └── PromptTemplateExample.java
-│       ├── memory/MemoryExample.java
-│       ├── tool/ToolCallingExample.java
-│       ├── rag/
-│       │   ├── DocumentRAGExample.java
-│       │   └── EmbeddingsExample.java
-│       └── ...
-│
-└── langchain4j-enterprise/               # 单体版（保留，迁移中）
-```
-
-## 微服务架构说明
-
-### 协作流程
-
-```
-用户请求 → Gateway:8080 → RoutingAgent (意图识别)
-                                    ↓
-                    ┌───────────────┼───────────────┐
-                    ↓               ↓               ↓
-            dish-agent-dish  dish-agent-work  dish-agent-chat
-              (Dubbo)          (Dubbo)         (Dubbo)
-                  ↓               ↓
-              RAGPipeline   Inventory/Order/Refund
-```
-
-### 意图类型 (IntentType)
-- `GREETING` / `GENERAL_CHAT` → dish-agent-chat（直接对话）
-- `DISH_QUESTION` / `DISH_INGREDIENT` / `DISH_COOKING_METHOD` / `POLICY_QUESTION` → dish-agent-dish（RAG）
-- `QUERY_INVENTORY` / `QUERY_ORDER` / `CREATE_REFUND` → dish-agent-workorder（业务工具）
-
-### 核心组件
-
-1. **ReActEngine** - ReAct 多步推理引擎接口
-   - `AbstractReActEngine` 提供通用流程
-   - 子类实现：think(), decideAction(), executeAction()
-
-2. **AgentContext** - 跨 Agent 状态传递
-   - 字段: sessionId, intent, storeId, orderId, dishName, refundReason, userInput
-
-3. **Dubbo 接口** - 服务间通信契约
-   - `DishAgentService`, `WorkOrderAgentService`, `ChatAgentService`
-
-## 技术栈
-
-| 组件 | 版本 |
-|------|------|
-| Spring Cloud Alibaba | 2023.0.1.0 |
-| Dubbo | 3.2.4 |
-| Nacos | 服务注册与发现 |
-| LangChain4j | 1.12.2 |
-| Java | 17+ |
-
-## 依赖管理
-
-在根 `pom.xml` 中统一管理：
-
-- **Spring Boot**: 3.2.0
-- **Spring Cloud**: 2023.0.0
-- **Spring Cloud Alibaba**: 2023.0.1.0
-- **Dubbo**: 3.2.4
-- **LangChain4j**: 1.12.2
-- **langchain4j-milvus**: 1.0.0-beta5
-- **langchain4j-cohere**: 1.0.0-beta5
-
-## 环境要求
-
-- **Java 17+** 必需
-- **Docker** 用于 Nacos
-- **Minimax API 密钥** 在 `application.yml` 中配置
-- **Milvus**（可选，用于生产环境向量存储）
-
-## 故障排除
-
-1. **Nacos 连接失败** - 确保 Nacos 已启动：`docker ps | grep nacos`
-2. **Dubbo 服务不可达** - 检查服务是否注册到 Nacos
-3. **编译错误** - 确保使用 Java 17+：`java -version`
-4. **RAG 无结果** - 检查 Milvus 是否运行（生产环境）
-
-## 约束
-
-在建议任何命令之前，请先验证该命令是否存在于当前的 Claude Code 版本中。切勿在未确认已实现的情况下建议 /sessions、/history 或其他命令。
-
-## API 探索
-
-当使用不熟悉的库 API 时，可使用 Agent 工具来探索代码库，找到正确的方法签名后再进行实现。可使用 `api-explore` skill 来启动探索。
+- 需要产品定位、长期边界、稳定架构约束：读 [DESIGN.md](DESIGN.md)
+- 需要项目概览、快速开始、公开导航：读 [README.md](README.md)
+- 需要阶段顺序、退出条件、前置依赖：读 [docs/roadmap/PROJECT_DEVELOPMENT_PLAN.md](docs/roadmap/PROJECT_DEVELOPMENT_PLAN.md)
+- 需要 `docs/` 目录 owns / must-not-own 规则：读 [docs/README.md](docs/README.md)
+- 需要当前阶段 requirements / architecture / tests：读取对应 PRD、技术设计、测试计划

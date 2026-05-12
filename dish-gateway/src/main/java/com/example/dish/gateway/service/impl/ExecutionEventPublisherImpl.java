@@ -111,6 +111,9 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
                 null,
                 0L,
                 graphMetadata(routing, traceId),
+                routing != null && routing.context() != null ? routing.context().getUserInput() : null,
+                routing != null ? routing.targetAgent() : null,
+                routing != null ? routing.confidence() : 0.0,
                 List.copyOf(nodes),
                 List.copyOf(edges),
                 0
@@ -294,13 +297,10 @@ public class ExecutionEventPublisherImpl implements ExecutionEventPublisher {
     private Map<String, Object> graphMetadata(RoutingDecision routing, String traceId) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         if (routing != null && routing.context() != null) {
-            metadata.put("userInput", routing.context().getUserInput());
-            metadata.put("routingTargetAgent", routing.targetAgent());
             metadata.put("sessionId", routing.context().getSessionId());
             metadata.put("storeId", routing.context().getStoreId());
         }
         metadata.put("traceId", traceId);
-        metadata.put("routingConfidence", routing != null ? routing.confidence() : 0.0);
         return Map.copyOf(metadata);
     }
 

@@ -28,6 +28,7 @@ import com.example.dish.control.policy.model.PolicyEvaluationResult;
 import com.example.dish.control.policy.service.PolicyDecisionService;
 import com.example.dish.gateway.dto.GatewayResponse;
 import com.example.dish.gateway.dto.control.PlanPreviewResponse;
+import com.example.dish.gateway.service.StepEvaluation;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -114,10 +115,12 @@ class OrchestrationControlServiceImplTest {
     @Test
     void shouldDetectApprovalRequiredDecision() throws Exception {
         OrchestrationControlServiceImpl service = newService();
-        inject(service, "policyDecisionService", (PolicyDecisionService) request -> new PolicyEvaluationResult(
+        PolicyGatekeeperImpl gatekeeper = new PolicyGatekeeperImpl();
+        inject(gatekeeper, "policyDecisionService", (PolicyDecisionService) request -> new PolicyEvaluationResult(
                 PolicyDecision.requireApproval("p1", "needs approval", "high"),
                 "policy-v1"
         ));
+        inject(service, "policyGatekeeper", gatekeeper);
 
         RoutingDecision routing = RoutingDecision.builder()
                 .intent(IntentType.CREATE_REFUND)
@@ -126,18 +129,15 @@ class OrchestrationControlServiceImplTest {
                 .context(AgentContext.builder().sessionId("S-12").intent(IntentType.CREATE_REFUND).storeId("STORE-1").build())
                 .build();
 
-        List<AgentExecutionStep> steps = List.of(
-                AgentExecutionStep.builder().stepId("s1").targetAgent("work-order").nodeType("AGENT_CALL").build()
-        );
+        AgentExecutionStep step = AgentExecutionStep.builder().stepId("s1").targetAgent("work-order").nodeType("AGENT_CALL").build();
 
-        AgentExecutionStep approvalStep = service.findFirstApprovalRequiredStep(steps, routing, "trace-12");
+        StepEvaluation eval = service.evaluateStep(step, routing, "trace-12");
 
-        Assertions.assertNotNull(approvalStep);
-        Assertions.assertEquals("s1", approvalStep.stepId());
+        Assertions.assertEquals(StepEvaluation.REQUIRES_APPROVAL, eval);
     }
 
     @Test
-    void shouldBuildApprovalPendingResponse() {
+    void shouldBuildApprovalPendingResponse() throws Exception {
         OrchestrationControlServiceImpl service = newService();
 
         RoutingDecision routing = RoutingDecision.builder()
@@ -200,10 +200,12 @@ class OrchestrationControlServiceImplTest {
     @Test
     void shouldReturnNullWhenNoApprovalRequired() throws Exception {
         OrchestrationControlServiceImpl service = newService();
-        inject(service, "policyDecisionService", (PolicyDecisionService) request -> new PolicyEvaluationResult(
+        PolicyGatekeeperImpl gatekeeper = new PolicyGatekeeperImpl();
+        inject(gatekeeper, "policyDecisionService", (PolicyDecisionService) request -> new PolicyEvaluationResult(
                 PolicyDecision.allow("p-allow", "ok"),
                 "policy-v1"
         ));
+        inject(service, "policyGatekeeper", gatekeeper);
 
         RoutingDecision routing = RoutingDecision.builder()
                 .intent(IntentType.QUERY_ORDER)
@@ -212,20 +214,19 @@ class OrchestrationControlServiceImplTest {
                 .context(AgentContext.builder().sessionId("S-16").intent(IntentType.QUERY_ORDER).storeId("STORE-16").build())
                 .build();
 
-        List<AgentExecutionStep> steps = List.of(
-                AgentExecutionStep.builder().stepId("s1").targetAgent("work-order").nodeType("AGENT_CALL").build()
-        );
+        AgentExecutionStep step = AgentExecutionStep.builder().stepId("s1").targetAgent("work-order").nodeType("AGENT_CALL").build();
 
-        AgentExecutionStep approvalStep = service.findFirstApprovalRequiredStep(steps, routing, "trace-16");
+        StepEvaluation eval = service.evaluateStep(step, routing, "trace-16");
 
-        Assertions.assertNull(approvalStep);
+        Assertions.assertEquals(StepEvaluation.ALLOWED, eval);
     }
 
     @Test
     void shouldFilterOutNonAllowDecisions() throws Exception {
         OrchestrationControlServiceImpl service = newService();
         AtomicReference<PolicyDecisionType> mode = new AtomicReference<>(PolicyDecisionType.REQUIRE_APPROVAL);
-        inject(service, "policyDecisionService", (PolicyDecisionService) request -> new PolicyEvaluationResult(
+        PolicyGatekeeperImpl gatekeeper = new PolicyGatekeeperImpl();
+        inject(gatekeeper, "policyDecisionService", (PolicyDecisionService) request -> new PolicyEvaluationResult(
                 switch (mode.get()) {
                     case ALLOW -> PolicyDecision.allow("p-allow", "ok");
                     case DENY -> PolicyDecision.deny("p-deny", "deny");
@@ -233,6 +234,7 @@ class OrchestrationControlServiceImplTest {
                 },
                 "policy-v1"
         ));
+        inject(service, "policyGatekeeper", gatekeeper);
 
         RoutingDecision routing = RoutingDecision.builder()
                 .intent(IntentType.CREATE_REFUND)
@@ -241,20 +243,18 @@ class OrchestrationControlServiceImplTest {
                 .context(AgentContext.builder().sessionId("S-14").intent(IntentType.CREATE_REFUND).storeId("STORE-1").build())
                 .build();
 
-        List<AgentExecutionStep> steps = List.of(
-                AgentExecutionStep.builder().stepId("s1").targetAgent("work-order").nodeType("AGENT_CALL").build()
-        );
+        AgentExecutionStep step = AgentExecutionStep.builder().stepId("s1").targetAgent("work-order").nodeType("AGENT_CALL").build();
 
-        List<AgentExecutionStep> blocked = service.filterAllowedSteps(steps, routing, "trace-14");
-        Assertions.assertTrue(blocked.isEmpty());
+        StepEvaluation blocked = service.evaluateStep(step, routing, "trace-14");
+        Assertions.assertEquals(StepEvaluation.REQUIRES_APPROVAL, blocked);
 
         mode.set(PolicyDecisionType.ALLOW);
-        List<AgentExecutionStep> allowed = service.filterAllowedSteps(steps, routing, "trace-14");
-        Assertions.assertEquals(1, allowed.size());
+        StepEvaluation allowed = service.evaluateStep(step, routing, "trace-14");
+        Assertions.assertEquals(StepEvaluation.ALLOWED, allowed);
     }
 
     @Test
-    void shouldBuildPolicyBlockedResponse() {
+    void shouldBuildPolicyBlockedResponse() throws Exception {
         OrchestrationControlServiceImpl service = newService();
 
         RoutingDecision routing = RoutingDecision.builder()
@@ -288,12 +288,7 @@ class OrchestrationControlServiceImplTest {
                         .edges(List.of(new ExecutionEdge("e1", "n1", "n2", ExecutionEdgeCondition.ON_SUCCESS, Map.of())))
                         .build()
         ));
-        inject(service, "policyDecisionService", (PolicyDecisionService) request -> new PolicyEvaluationResult(
-                "work-order".equals(request.node().target())
-                        ? PolicyDecision.requireApproval("p-preview", "refund needs approval", "high")
-                        : PolicyDecision.allow("p-allow", "safe"),
-                "policy-v1"
-        ));
+        inject(service, "policyGatekeeper", policyGatekeeperForPreview());
         inject(service, "memoryReadService", (MemoryReadService) request -> new MemoryReadResult(
                 List.of("用户上次问过订单状态"),
                 "test-memory",
@@ -348,14 +343,30 @@ class OrchestrationControlServiceImplTest {
         Assertions.assertFalse(source.contains("new MemoryWriteRequest("));
     }
 
-    private OrchestrationControlServiceImpl newService() {
-        return new OrchestrationControlServiceImpl();
+    private OrchestrationControlServiceImpl newService() throws Exception {
+        OrchestrationControlServiceImpl service = new OrchestrationControlServiceImpl();
+        inject(service, "planningStepMapper", new PlanningStepMapper());
+        inject(service, "planPreviewAssembler", new PlanPreviewAssembler());
+        inject(service, "executionSummaryWriter", new ExecutionSummaryWriter());
+        inject(service, "policyGatekeeper", new PolicyGatekeeperImpl());
+        return service;
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private PolicyGatekeeperImpl policyGatekeeperForPreview() throws Exception {
+        PolicyGatekeeperImpl gatekeeper = new PolicyGatekeeperImpl();
+        inject(gatekeeper, "policyDecisionService", (PolicyDecisionService) request -> new PolicyEvaluationResult(
+                "work-order".equals(request.node().target())
+                        ? PolicyDecision.requireApproval("p-preview", "refund needs approval", "high")
+                        : PolicyDecision.allow("p-allow", "safe"),
+                "policy-v1"
+        ));
+        return gatekeeper;
     }
 
     private String fileContent(String path) {

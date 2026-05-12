@@ -45,7 +45,7 @@ class ControlPlaneQueryServiceImplTest {
 
     @Test
     void shouldReturnLatestExecutionAndReplay() throws Exception {
-        ControlPlaneQueryServiceImpl service = new ControlPlaneQueryServiceImpl();
+        ControlPlaneQueryServiceImpl service = newService();
         ExecutionGraphViewResult graph = new ExecutionGraphViewResult(
                 "exec-100",
                 "plan-100",
@@ -58,7 +58,10 @@ class ControlPlaneQueryServiceImplTest {
                 Instant.parse("2026-04-21T10:15:30Z"),
                 null,
                 3200L,
-                Map.of("routingTargetAgent", "work-order"),
+                Map.of(),
+                null,
+                "work-order",
+                0.0,
                 List.of(new ExecutionNodeView(
                         "node-1",
                         "work-order",
@@ -116,7 +119,7 @@ class ControlPlaneQueryServiceImplTest {
 
     @Test
     void shouldReturnSessionTimeline() throws Exception {
-        ControlPlaneQueryServiceImpl service = new ControlPlaneQueryServiceImpl();
+        ControlPlaneQueryServiceImpl service = newService();
         inject(service, "memoryTimelineService", (MemoryTimelineService) request -> new MemoryTimelineResult(
                 List.of(new MemoryTimelineEntry(
                         "execution_summary",
@@ -142,7 +145,7 @@ class ControlPlaneQueryServiceImplTest {
 
     @Test
     void shouldReturnRetrievalExplainability() throws Exception {
-        ControlPlaneQueryServiceImpl service = new ControlPlaneQueryServiceImpl();
+        ControlPlaneQueryServiceImpl service = newService();
         inject(service, "memoryReadService", (MemoryReadService) request -> new MemoryReadResult(
                 List.of("长期经验：审批通过后沉淀知识"),
                 "milvus:dish_memory_long_term",
@@ -175,7 +178,7 @@ class ControlPlaneQueryServiceImplTest {
 
     @Test
     void shouldParseApprovalTicketFromTimeline() throws Exception {
-        ControlPlaneQueryServiceImpl service = new ControlPlaneQueryServiceImpl();
+        ControlPlaneQueryServiceImpl service = newService();
         ApprovalTicket ticket = new ApprovalTicket(
                 "APR-2001",
                 "trace-2001",
@@ -215,7 +218,7 @@ class ControlPlaneQueryServiceImplTest {
 
     @Test
     void shouldDecideApprovalTicket() throws Exception {
-        ControlPlaneQueryServiceImpl service = new ControlPlaneQueryServiceImpl();
+        ControlPlaneQueryServiceImpl service = newService();
         AtomicBoolean resumed = new AtomicBoolean(false);
         inject(service, "executionMetricsService", new ExecutionMetricsService(new SimpleMeterRegistry()));
         ApprovalTicket ticket = new ApprovalTicket(
@@ -271,7 +274,7 @@ class ControlPlaneQueryServiceImplTest {
 
     @Test
     void shouldBuildDashboardOverview() throws Exception {
-        ControlPlaneQueryServiceImpl service = new ControlPlaneQueryServiceImpl();
+        ControlPlaneQueryServiceImpl service = newService();
         inject(service, "dashboardOverviewAssembler", new DashboardOverviewAssembler());
         ApprovalTicket pending = new ApprovalTicket(
                 "APR-4001",
@@ -325,6 +328,9 @@ class ControlPlaneQueryServiceImplTest {
                             null,
                             1000L,
                             Map.of(),
+                            null,
+                            null,
+                            0.0,
                             List.of(),
                             List.of(),
                             3
@@ -343,6 +349,9 @@ class ControlPlaneQueryServiceImplTest {
                         null,
                         2000L,
                         Map.of(),
+                        null,
+                        null,
+                        0.0,
                         List.of(),
                         List.of(),
                         2
@@ -371,6 +380,12 @@ class ControlPlaneQueryServiceImplTest {
         Assertions.assertTrue(response.memoryLayerBreakdown().containsKey("APPROVAL"));
         Assertions.assertEquals(2, response.recentApprovals().size());
         Assertions.assertEquals("exec-a", response.activeSessions().get(0).latestExecutionId());
+    }
+
+    private ControlPlaneQueryServiceImpl newService() throws Exception {
+        ControlPlaneQueryServiceImpl service = new ControlPlaneQueryServiceImpl();
+        inject(service, "controlPlaneViewAssembler", new com.example.dish.gateway.support.ControlPlaneViewAssembler());
+        return service;
     }
 
     private void inject(Object target, String fieldName, Object value) throws Exception {

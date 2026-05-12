@@ -20,6 +20,9 @@ public record ExecutionGraphViewResult(
         Instant finishedAt,
         long durationMs,
         Map<String, Object> metadata,
+        String userInput,
+        String routingTargetAgent,
+        double routingConfidence,
         List<ExecutionNodeView> nodes,
         List<ExecutionEdgeView> edges,
         int totalEvents

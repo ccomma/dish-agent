@@ -7,13 +7,14 @@ import com.example.dish.memory.model.LongTermMemoryHit;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.filter.Filter;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -39,9 +40,16 @@ public class LongTermMemoryVectorStore {
 
     private final Map<String, LongTermMemoryDocument> catalog = new ConcurrentHashMap<>();
     private final AtomicBoolean initialized = new AtomicBoolean(false);
-    private final LongTermMemoryDocumentAssembler documentAssembler = new LongTermMemoryDocumentAssembler();
-    private final EmbeddingModelFactory embeddingModelFactory = new EmbeddingModelFactory();
-    private final LongTermEmbeddingStoreFactory embeddingStoreFactory = new LongTermEmbeddingStoreFactory();
+
+    @Resource
+    private LongTermMemoryDocumentAssembler documentAssembler;
+    @Resource
+    private LongTermMemoryProviderRuntime providerRuntime;
+
+    @PostConstruct
+    void init() {
+        ensureReady();
+    }
 
     @Value("${memory.retrieval.vector-dim:128}")
     private int vectorDim = 128;
@@ -73,17 +81,12 @@ public class LongTermMemoryVectorStore {
     @Value("${memory.long-term.openai.model:text-embedding-3-small}")
     private String openAiModel = "text-embedding-3-small";
 
-    private volatile EmbeddingStore<TextSegment> embeddingStore;
-    private volatile EmbeddingModel embeddingModel;
-
     public void index(MemoryWriteRequest request) {
         // 1. 只处理长期知识层写入，其他记忆层由时间线存储负责。
         if (request == null || request.memoryLayer() != MemoryLayer.LONG_TERM_KNOWLEDGE) {
             return;
         }
 
-        // 2. 确保 embedding 模型和向量库已经初始化。
-        ensureReady();
         LongTermMemoryDocument document = documentAssembler.toDocument(request);
         catalog.put(document.id(), document);
 
@@ -105,8 +108,6 @@ public class LongTermMemoryVectorStore {
             return List.of();
         }
 
-        // 2. 构造带租户过滤的向量检索请求。
-        ensureReady();
         try {
             // 3. 将向量库命中转换为长期记忆召回结果。
             return searchHits(tenantId, query, limit);
@@ -120,17 +121,12 @@ public class LongTermMemoryVectorStore {
     }
 
     public String source() {
-        ensureReady();
-        if ("milvus".equalsIgnoreCase(provider)) {
-            return "milvus:" + milvusCollection;
-        }
-        return "inmemory-long-term";
+        return providerRuntime.source(milvusCollection);
     }
 
     public void clearForTest() {
         catalog.clear();
-        embeddingStore = null;
-        embeddingModel = null;
+        providerRuntime.clear();
         initialized.set(false);
     }
 
@@ -149,19 +145,16 @@ public class LongTermMemoryVectorStore {
     private void ensureReady() {
         if (initialized.compareAndSet(false, true)) {
             // 1. 首次使用时按配置初始化 embedding 模型和底层向量库。
-            embeddingModel = embeddingModelFactory.create(
+            providerRuntime.initialize(
+                    provider,
                     embeddingProvider,
                     openAiApiKey,
                     openAiBaseUrl,
                     openAiModel,
-                    vectorDim
-            );
-            embeddingStore = embeddingStoreFactory.create(
-                    provider,
+                    vectorDim,
                     milvusHost,
                     milvusPort,
-                    milvusCollection,
-                    vectorDim
+                    milvusCollection
             );
             // 2. 再把内存 catalog 回放到当前 store，保证切换 provider 后仍能查到已写入知识。
             replayCatalog();
@@ -171,25 +164,25 @@ public class LongTermMemoryVectorStore {
     private void fallbackToInMemoryStore() {
         // 1. 故障时强制切到本地内存向量库，避免反复打爆外部依赖。
         provider = "inmemory";
-        embeddingStore = embeddingStoreFactory.createInMemory();
+        providerRuntime.fallbackToInMemoryStore();
         // 2. 把已有 catalog 全量回放到 fallback store，保证当前进程内已经写入的知识仍可检索。
         replayCatalog();
     }
 
     private void addDocumentToStore(LongTermMemoryDocument document) {
-        Embedding embedding = embeddingModel.embed(document.content()).content();
+        Embedding embedding = providerRuntime.embeddingModel().embed(document.content()).content();
         TextSegment segment = TextSegment.from(document.content(), Metadata.from(document.metadata()));
-        embeddingStore.addAll(List.of(document.id()), List.of(embedding), List.of(segment));
+        providerRuntime.embeddingStore().addAll(List.of(document.id()), List.of(embedding), List.of(segment));
     }
 
     private List<LongTermMemoryHit> searchHits(String tenantId, String query, int limit) {
         EmbeddingSearchRequest request = EmbeddingSearchRequest.builder()
-                .queryEmbedding(embeddingModel.embed(query).content())
+                .queryEmbedding(providerRuntime.embeddingModel().embed(query).content())
                 .maxResults(Math.max(limit, 5))
                 .minScore(minScore)
                 .filter(buildFilter(tenantId))
                 .build();
-        return embeddingStore.search(request).matches().stream()
+        return providerRuntime.embeddingStore().search(request).matches().stream()
                 .map(match -> documentAssembler.toHit(match, catalog, source()))
                 .filter(Objects::nonNull)
                 .limit(Math.max(limit, 5))
@@ -197,7 +190,7 @@ public class LongTermMemoryVectorStore {
     }
 
     private void replayCatalog() {
-        if (embeddingStore == null || embeddingModel == null || catalog.isEmpty()) {
+        if (!providerRuntime.ready() || catalog.isEmpty()) {
             return;
         }
         // 1. 先把 catalog 中的文档重新计算 embedding，构造一批待回放向量。
@@ -206,11 +199,11 @@ public class LongTermMemoryVectorStore {
         List<TextSegment> segments = new ArrayList<>();
         for (LongTermMemoryDocument document : catalog.values()) {
             ids.add(document.id());
-            embeddings.add(embeddingModel.embed(document.content()).content());
+            embeddings.add(providerRuntime.embeddingModel().embed(document.content()).content());
             segments.add(TextSegment.from(document.content(), Metadata.from(document.metadata())));
         }
         // 2. 一次性批量写回当前 store，减少 provider 切换时的重复调用成本。
-        embeddingStore.addAll(ids, embeddings, segments);
+        providerRuntime.embeddingStore().addAll(ids, embeddings, segments);
     }
 
 }

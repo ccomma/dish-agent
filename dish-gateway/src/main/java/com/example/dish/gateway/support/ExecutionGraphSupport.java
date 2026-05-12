@@ -47,23 +47,22 @@ public class ExecutionGraphSupport {
             return null;
         }
         IntentType intent = graph.intent() != null ? IntentType.valueOf(graph.intent()) : IntentType.GENERAL_CHAT;
-        String userInput = asString(graph.metadata().get("userInput"));
         AgentContext context = AgentContext.builder()
                 .sessionId(graph.sessionId())
                 .storeId(graph.storeId())
-                .userInput(userInput)
+                .userInput(graph.userInput())
                 .intent(intent)
                 .build();
-        context.getMetadata().put("traceId", graph.traceId());
+        context.setTraceId(graph.traceId());
 
         return RoutingDecision.builder()
                 .intent(intent)
-                .targetAgent(asString(graph.metadata().get("routingTargetAgent")))
+                .targetAgent(graph.routingTargetAgent())
                 .reason("resume-execution")
                 .context(context)
                 .planId(graph.planId())
                 .executionMode(graph.executionMode())
-                .confidence(asDouble(graph.metadata().get("routingConfidence")))
+                .confidence(graph.routingConfidence())
                 .executionSteps(reconstructSteps(graph))
                 .build();
     }

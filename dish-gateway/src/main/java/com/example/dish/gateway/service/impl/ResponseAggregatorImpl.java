@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 结果聚合服务。
@@ -106,33 +105,32 @@ public class ResponseAggregatorImpl implements ResponseAggregator {
     }
 
     private String traceId(RoutingDecision routing) {
-        Object value = metadata(routing).get("traceId");
-        return value instanceof String text ? text : null;
+        if (routing == null || routing.context() == null) {
+            return null;
+        }
+        return routing.context().getTraceId();
     }
 
     private boolean memoryHit(RoutingDecision routing) {
-        Object value = metadata(routing).get("memoryHit");
-        return value instanceof Boolean flag && flag;
+        if (routing == null || routing.context() == null) {
+            return false;
+        }
+        Boolean value = routing.context().getMemoryHit();
+        return value != null && value;
     }
 
     private String approvalId(RoutingDecision routing) {
-        Object value = metadata(routing).get("approvalId");
-        return value instanceof String text ? text : null;
+        if (routing == null || routing.context() == null) {
+            return null;
+        }
+        return routing.context().getApprovalId();
     }
 
-    @SuppressWarnings("unchecked")
     private List<String> memorySnippets(RoutingDecision routing) {
-        Object value = metadata(routing).get("memorySnippets");
-        if (value instanceof List<?> list) {
-            return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
+        if (routing == null || routing.context() == null) {
+            return List.of();
         }
-        return List.of();
-    }
-
-    private Map<String, Object> metadata(RoutingDecision routing) {
-        if (routing == null || routing.context() == null || routing.context().getMetadata() == null) {
-            return Map.of();
-        }
-        return routing.context().getMetadata();
+        List<String> value = routing.context().getMemorySnippets();
+        return value != null ? value : List.of();
     }
 }

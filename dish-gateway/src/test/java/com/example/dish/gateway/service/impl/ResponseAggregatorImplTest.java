@@ -33,9 +33,9 @@ class ResponseAggregatorImplTest {
                 0.93,
                 Map.of()
         );
-        context.getMetadata().put("traceId", "trace-4004");
-        context.getMetadata().put("memoryHit", true);
-        context.getMetadata().put("memorySnippets", List.of("历史上问过宫保鸡丁"));
+        context.setTraceId("trace-4004");
+        context.setMemoryHit(true);
+        context.setMemorySnippets(List.of("历史上问过宫保鸡丁"));
 
         AgentResponse primary = AgentResponse.builder()
                 .success(true)

@@ -6,6 +6,8 @@ import com.example.dish.common.runtime.ExecutionNode;
 import com.example.dish.common.runtime.ExecutionNodeType;
 import com.example.dish.common.runtime.ExecutionPlan;
 
+import org.springframework.stereotype.Component;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +17,7 @@ import java.util.Map;
  * planner graph 到 gateway 执行步骤的映射器。
  * 只负责节点/边结构转换和 fallback step 构造，不参与 RPC 调用或策略判断。
  */
+@Component
 public class PlanningStepMapper {
 
     public List<AgentExecutionStep> toExecutionSteps(ExecutionPlan plan) {
