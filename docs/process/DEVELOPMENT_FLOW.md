@@ -1,10 +1,10 @@
 # DEVELOPMENT_FLOW.md
 
-## Purpose
+## 目的
 
 本文定义 `dish-agent` 从 phase 规划走向代码实现、验收和合并的正式流程。它的职责是保证 phase 执行顺序稳定、文档层不串位、阶段证据可追溯。
 
-## Document Responsibility Boundary Summary
+## 文档职责边界摘要
 
 | 文档 | 负责什么 | 不负责什么 |
 | --- | --- | --- |
@@ -16,7 +16,7 @@
 | `docs/context/CURRENT_HANDOFF.md` | 当前执行态最小上下文 | 长设计历史 |
 | `docs/phases/` | 单 phase 的执行包和证据 | 长期产品方向 |
 
-## Context Loading Protocol
+## 上下文加载协议
 
 新会话或新 agent 承接开发时，按下面顺序加载：
 
@@ -29,7 +29,7 @@
 
 `docs/interview/`、`docs/openapi/`、`docs/discovery/` 等辅助层默认不进入主加载链。
 
-## Standard Phase Progression
+## 标准阶段推进流程
 
 所有正式开发默认遵循：
 
@@ -68,7 +68,7 @@
 - 保留 phase 分支作为阶段证据
 - 更新 `CURRENT_HANDOFF.md` 指向下一阶段或下一任务
 
-## Phase-End Update Rules
+## 阶段结束更新规则
 
 阶段结束时至少检查：
 
@@ -80,7 +80,7 @@
 6. `DESIGN.md` 是否需要吸收新的长期判断
 7. `docs/README.md` 是否需要因目录 ownership 变化而更新
 
-## Branch And Phase-Package Rules
+## 分支与阶段执行包规则
 
 - 一个 phase 默认对应一个独立分支：`phase-0X-<slug>`
 - phase 分支与 phase 文档目录应使用同一标识

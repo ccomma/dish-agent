@@ -1,13 +1,27 @@
-# Development Flow Template
+# 开发流程模板
 
-## Purpose
+> 用于定义项目从长期设计到阶段开发、测试、验收和合并的正式流程。它不承担当前阶段状态。
 
-## Document responsibility boundary summary
+## 目的
 
-## Context loading protocol
+说明这个流程文档存在的目的，以及要防止哪些常见漂移。
 
-## Standard phase progression
+## 文档职责边界摘要
 
-## Phase-end update rules
+概括核心文档层分别拥有哪类真相、哪些内容不应写进去。
 
-## Branch and phase-package rules
+## 上下文加载协议
+
+写清新会话或新 agent 承接时应按什么顺序加载上下文。
+
+## 标准阶段推进流程
+
+写清默认阶段顺序，以及每一步分别回答什么问题。
+
+## 阶段结束更新规则
+
+列出阶段结束时必须回写、校验和保留的证据。
+
+## 分支与阶段执行包规则
+
+说明阶段分支、阶段执行包命名和历史证据补建规则。

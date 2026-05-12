@@ -29,11 +29,19 @@
 
 ## 必须知道的仓库约束
 
-1. Gateway 只依赖 `dish-control-api`，不直接依赖 Provider 实现模块。
-2. Agent 之间不直接通信，统一经 Gateway 编排。
-3. 记忆读写统一走 `dish-memory` Dubbo 接口，Agent 不直接访问 Redis/Milvus。
-4. 所有跨链路请求都要保持 `traceId` 透传：HTTP `X-Trace-Id`、Dubbo attachment `traceId`、日志 MDC `traceId=%X{traceId}`。
-5. `docs/discovery/` 是上游输入，不是执行态文档。
+1. 注释使用中文；核心门面类、编排类、存储适配类、运行态投影类默认补中文类注释和步骤注释。
+2. Gateway 只依赖 `dish-control-api`，不直接依赖 Provider 实现模块。
+3. Agent 之间不直接通信，统一经 Gateway 编排。
+4. 记忆读写统一走 `dish-memory` Dubbo 接口，Agent 不直接访问 Redis/Milvus。
+5. 所有跨链路请求都要保持 `traceId` 透传：HTTP `X-Trace-Id`、Dubbo attachment `traceId`、日志 MDC `traceId=%X{traceId}`。
+6. `docs/discovery/` 是上游输入，不是执行态文档。
+7. 修改代码后需要判断是否同步更新 `README.md`、`DESIGN.md`、`docs/README.md` 或 phase 文档。
+
+## 工作流路由原则
+
+- 当前任务是新增需求、阶段切换或中途重规划时，先修 planning layers，再更新 `CURRENT_HANDOFF.md`
+- 当前任务是正式代码实现、调试、验证或 review 时，不要把文档治理流程当成替代实现流程
+- 当前任务涉及大架构边界变化时，先确认模块归属与阶段文档是否需要同步调整
 
 ## 何时继续加载长文档
 
@@ -42,3 +50,16 @@
 - 需要阶段顺序、退出条件、前置依赖：读 [docs/roadmap/PROJECT_DEVELOPMENT_PLAN.md](docs/roadmap/PROJECT_DEVELOPMENT_PLAN.md)
 - 需要 `docs/` 目录 owns / must-not-own 规则：读 [docs/README.md](docs/README.md)
 - 需要当前阶段 requirements / architecture / tests：读取对应 PRD、技术设计、测试计划
+
+## 常用验证命令
+
+```bash
+# 微服务主线编译
+mvn compile -pl dish-common,dish-control-api,dish-memory,dish-planner,dish-policy,dish-gateway,dish-agent-dish,dish-agent-workorder,dish-agent-chat -am -s settings-test.xml
+
+# 全量测试
+mvn test -s settings-test.xml
+
+# dish-memory 定向测试
+mvn test -pl dish-memory -am -s settings-test.xml -DfailIfNoTests=false
+```

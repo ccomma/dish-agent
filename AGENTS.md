@@ -33,15 +33,15 @@
 2. Gateway 只依赖 `dish-control-api`，不直接依赖 Provider 实现模块。
 3. Agent 之间不直接通信，统一经 Gateway 编排。
 4. 记忆读写统一走 `dish-memory` Dubbo 接口，Agent 不直接访问 Redis/Milvus。
-5. `docs/discovery/` 是上游输入，不是执行态文档。
-6. 修改代码后需要判断是否同步更新 `README.md`、`DESIGN.md`、`docs/README.md` 或 phase 文档。
+5. 所有跨链路请求都要保持 `traceId` 透传：HTTP `X-Trace-Id`、Dubbo attachment `traceId`、日志 MDC `traceId=%X{traceId}`。
+6. `docs/discovery/` 是上游输入，不是执行态文档。
+7. 修改代码后需要判断是否同步更新 `README.md`、`DESIGN.md`、`docs/README.md` 或 phase 文档。
 
-## Skills 与触发规则
+## 工作流路由原则
 
-- serious product 文档修复或中途重规划：优先使用 `product-plan`
-- 大架构重构或模块合并拆分：使用 `improve-codebase-architecture`
-- 模块职责整理、代码可读性或结构收敛：使用 `engineering-baseline`
-- 代码实现、调试、验证、review：不要把 `product-plan` 当成替代流程
+- 当前任务是新增需求、阶段切换或中途重规划时，先修 planning layers，再更新 `CURRENT_HANDOFF.md`
+- 当前任务是正式代码实现、调试、验证或 review 时，不要把文档治理流程当成替代实现流程
+- 当前任务涉及大架构边界变化时，先确认模块归属与阶段文档是否需要同步调整
 
 ## 常用验证命令
 

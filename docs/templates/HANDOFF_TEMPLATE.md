@@ -1,23 +1,47 @@
-# Handoff Template
+# 阶段交接模板
 
-Load order:
+> 用于阶段或任务交接。保持短、可恢复执行，不复制长设计文档。
 
-Current phase:
+加载顺序：
 
-Phase goal:
+写清新的会话先读什么，再按需读什么。
 
-Branch and commit policy:
+当前阶段：
 
-In scope:
+标明当前阶段名称或当前任务所在阶段。
 
-Out of scope:
+阶段目标：
 
-Key artifacts:
+用 1-2 句写清本阶段目标。
 
-Owned files / files to avoid:
+分支与提交策略：
 
-Verification commands:
+记录当前分支、base 和提交策略。
 
-Next work:
+范围内：
 
-Context budget rule:
+列出当前交接仍在范围内的工作。
+
+范围外：
+
+列出当前不要误做的事情。
+
+关键文档：
+
+链接当前最关键的 PRD、技术设计、测试计划、代码或测试。
+
+拥有文件 / 避免修改文件：
+
+说明当前工作拥有的文件和需要避免碰的文件。
+
+验证命令：
+
+写清最小验证命令。
+
+下一步：
+
+写清下一位接手者应从哪里开始。
+
+上下文预算规则：
+
+提醒不要默认加载全部历史文档。

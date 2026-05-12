@@ -25,7 +25,7 @@ query
 
 ## 架构范围
 
-### In scope
+### 范围内
 
 - 多通道召回抽象
 - BM25 与向量双路
@@ -34,7 +34,7 @@ query
 - 领域化 chunk 和 metadata 富化
 - 缓存与向量索引优化
 
-### Out of scope
+### 范围外
 
 - Query 复杂度分类器
 - Agent 自主改写 query / 反思追加检索

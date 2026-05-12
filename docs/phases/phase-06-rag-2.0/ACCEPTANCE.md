@@ -1,6 +1,6 @@
-# Phase 6 ACCEPTANCE
+# Phase 6 验收记录
 
-## Exit criteria checklist
+## 退出标准清单
 
 - [ ] `MemoryReadService` 对外契约保持兼容
 - [ ] 双路召回可工作，并具备单路故障降级
@@ -9,7 +9,7 @@
 - [ ] Phase 6 定义的关键测试与性能采样完成
 - [ ] 当前阶段产物与风险已记录完毕
 
-## Commands run
+## 实际运行命令
 
 当前尚未进入 Phase 6 实现，本节待收尾时补充真实命令。预期至少记录：
 
@@ -19,7 +19,7 @@ mvn test -pl dish-agent-dish,dish-memory -am -s settings-test.xml -DfailIfNoTest
 mvn test -s settings-test.xml
 ```
 
-## Actual results
+## 实际结果
 
 尚未填写。Phase 6 完成时需要按真实结果记录：
 
@@ -27,7 +27,7 @@ mvn test -s settings-test.xml
 - 关键指标实测值
 - 若有条件完成项或降级方案，明确写出原因
 
-## Final artifacts
+## 最终制品
 
 - `docs/prd/phase-06-rag-2.0.md`
 - `docs/technical/phase-06-rag-architecture.md`
@@ -36,7 +36,7 @@ mvn test -s settings-test.xml
 - `docs/adr/ADR-003-multi-recall-fusion.md`
 - 与 Phase 6 代码实现对应的最终文件清单
 
-## Commit / branch evidence
+## 提交 / 分支证据
 
 待 Phase 6 实际完成后填写：
 
@@ -45,7 +45,7 @@ mvn test -s settings-test.xml
 - 合并到 `main` 的提交
 - 如有远端分支，记录 push 结果
 
-## Remaining risks
+## 剩余风险
 
 当前已知但尚未验证的风险：
 

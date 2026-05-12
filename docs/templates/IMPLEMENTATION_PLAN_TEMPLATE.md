@@ -1,11 +1,23 @@
-# Implementation Plan Template
+# 实现计划模板
 
-## Preconditions
+> 这是执行切片文档。产品理由写在 PRD，架构理由写在技术设计，真实证据写在验收文档。
 
-## Milestones
+## 前置条件
 
-## Dependency order
+列出进入实现前必须已经稳定的 PRD、技术设计和测试计划前提。
 
-## Validation per milestone
+## 里程碑
 
-## Execution notes
+按里程碑拆分可执行工作，保持每块都能独立验证。
+
+## 依赖顺序
+
+说明实现顺序和前后依赖，不要退化成平铺待办。
+
+## 每个里程碑的验证方式
+
+为每个里程碑写最小验证方式。
+
+## 执行备注
+
+只记录执行层提示，不重复长期设计背景。

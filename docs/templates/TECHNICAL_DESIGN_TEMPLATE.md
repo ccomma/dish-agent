@@ -1,17 +1,35 @@
-# Technical Design Template
+# 技术设计模板
 
-## Design goal
+> 技术设计回答模块、接口、数据和风险边界，不记录每日执行状态。
 
-## Current gap
+## 设计目标
 
-## Scope
+说明本设计如何满足对应 PRD。
 
-## Main architecture
+## 当前缺口
 
-## Interfaces and models
+说明当前系统与目标之间还差什么。
 
-## Failure modes and fallback
+## 范围
 
-## Security and governance boundary
+明确本设计覆盖什么，不覆盖什么。
 
-## Validation focus
+## 主体架构
+
+描述主要模块边界、数据流和责任划分。
+
+## 接口与模型
+
+列出关键接口、数据模型或 DTO。
+
+## 失败模式与降级
+
+说明关键失败模式与降级策略。
+
+## 安全与治理边界
+
+说明风险分级、权限边界、审批或治理要求。
+
+## 验证重点
+
+写清实现后重点验证哪些技术风险。

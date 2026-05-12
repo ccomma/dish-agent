@@ -1,13 +1,27 @@
-# Acceptance Template
+# 验收模板
 
-## Exit criteria checklist
+> 记录真实验收证据，而不是设计预期。判断阶段是否真的完成，先看这里。
 
-## Commands run
+## 退出标准清单
 
-## Actual results
+列出阶段退出标准，并只勾选已经真实达成的项。
 
-## Final artifacts
+## 实际运行命令
 
-## Commit / branch evidence
+记录实际运行过的验证命令。
 
-## Remaining risks
+## 实际结果
+
+记录命令结果、关键输出、失败点或不适用原因。
+
+## 最终制品
+
+记录代码、文档、报告或可见产物。
+
+## 提交 / 分支证据
+
+记录相关提交、分支或合并证据。
+
+## 剩余风险
+
+保留尚未覆盖或已知但接受的风险。

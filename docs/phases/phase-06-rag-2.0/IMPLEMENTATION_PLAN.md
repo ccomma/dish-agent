@@ -1,4 +1,4 @@
-# Phase 6 IMPLEMENTATION_PLAN
+# Phase 6 实现计划
 
 ## 执行前提
 

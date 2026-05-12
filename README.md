@@ -18,10 +18,10 @@
 
 ### 我想开始继续开发
 
-1. [docs/context/CURRENT_HANDOFF.md](docs/context/CURRENT_HANDOFF.md)
-2. [docs/process/DEVELOPMENT_FLOW.md](docs/process/DEVELOPMENT_FLOW.md)
-3. [docs/phases/phase-06-rag-2.0/HANDOFF.md](docs/phases/phase-06-rag-2.0/HANDOFF.md)
-4. [AGENTS.md](AGENTS.md) 或 [CLAUDE.md](CLAUDE.md)
+1. 如果通过 agent 续接：先读 [AGENTS.md](AGENTS.md) 或 [CLAUDE.md](CLAUDE.md)
+2. [docs/context/CURRENT_HANDOFF.md](docs/context/CURRENT_HANDOFF.md)
+3. [docs/process/DEVELOPMENT_FLOW.md](docs/process/DEVELOPMENT_FLOW.md)
+4. [docs/phases/phase-06-rag-2.0/HANDOFF.md](docs/phases/phase-06-rag-2.0/HANDOFF.md)
 
 ### 我想看当前阶段设计细节
 
@@ -119,4 +119,5 @@ dish-agent/
 
 - [docs/adr/ADR-003-multi-recall-fusion.md](docs/adr/ADR-003-multi-recall-fusion.md)
 - [docs/adr/ADR-006-agentic-rag.md](docs/adr/ADR-006-agentic-rag.md)
+- [docs/PERFORMANCE_OPTIMIZATION.md](docs/PERFORMANCE_OPTIMIZATION.md)
 - [ops/observability/README.md](ops/observability/README.md)

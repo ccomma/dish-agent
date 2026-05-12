@@ -296,4 +296,4 @@ Agent 决定使用工具
 | 记忆读写 | 5-50ms | Redis Pipeline + 本地缓存 |
 | **端到端目标** | P50 < 2s, P95 < 8s | - |
 
-详见 `docs/technical/PERFORMANCE_OPTIMIZATION.md`。
+详见 `docs/PERFORMANCE_OPTIMIZATION.md`。
